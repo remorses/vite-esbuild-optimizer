@@ -49,7 +49,7 @@ export function esbuildOptimizerPlugin({
 
             const port = ctx.port
 
-            const isUserImportPath = (importPath: string) => {
+            const isLinkedImportPath = (importPath: string) => {
                 return linkedPackages.has(
                     importPath.replace(moduleRE, '').split('/')[0],
                 )
@@ -66,7 +66,7 @@ export function esbuildOptimizerPlugin({
                 stopTraversing: (importPath) => {
                     return (
                         moduleRE.test(importPath) &&
-                        !isUserImportPath(importPath)
+                        !isLinkedImportPath(importPath)
                     )
                 },
 
@@ -83,8 +83,8 @@ export function esbuildOptimizerPlugin({
                     .filter(
                         (x) =>
                             moduleRE.test(x.importPath) &&
-                            !isUserImportPath(x.importPath),
-                    ) // TODO remove linked deps? linked deps should be already optimized?
+                            !isLinkedImportPath(x.importPath),
+                    )
                     .map((x) => {
                         const k = x.importPath //.replace(moduleRE, '')
 
