@@ -60,8 +60,9 @@ export function esbuildOptimizerPlugin({
                 // hash is consistent, no need to re-bundle
                 if (prevHash === depHash) {
                     console.info(
-                        'Hash is consistent. Skipping. Use --force to override.',
+                        'Hash is consistent. Skipping optimization.',
                     )
+                    alreadyProcessed = true
                     return
                 }
             }
