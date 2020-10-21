@@ -4,24 +4,31 @@ import {
     traverseEsModules,
 } from 'es-module-traversal'
 import path from 'path'
+import fsx from 'fs-extra'
+import findUp from 'find-up'
+import { createHash } from 'crypto'
+import { promises as fsp } from 'fs'
 import url from 'url'
 import type { ServerPlugin, UserConfig } from 'vite'
 import { bundleWithEsBuild } from './esbuild'
 import { printStats } from './stats'
 
 const moduleRE = /^\/@modules\//
+const hashPath = '.optimizer-hash'
 
 export function esbuildOptimizerPlugin({
     entryPoints,
     link = [],
+    force = false,
 }): ServerPlugin {
     // maps /@modules/module/index.js to /web_modules/module/index.js
     const webModulesResolutions = new Map<string, string>()
 
     const linkedPackages = new Set(link)
     // TODO store an hash of lockfiles and last built dependencies to not optimize every time
+
     let alreadyProcessed = false
-    return ({ app, root, watcher, resolver }) => {
+    return ({ app, root, watcher, config, resolver }) => {
         const dest = path.join(root, 'web_modules')
 
         app.use(async (ctx, next) => {
@@ -35,6 +42,22 @@ export function esbuildOptimizerPlugin({
                 // redirect will also work in export because all relative imports will be converted to absolute paths by the server
                 // TODO redirect will not work with export if the extension of the compiled module is different than the old one
             }
+
+            const depHash = await getDepHash(root)
+            if (!force) {
+                let prevHash = await fsp
+                    .readFile(hashPath, 'utf-8')
+                    .catch(() => '')
+
+                // hash is consistent, no need to re-bundle
+                if (prevHash === depHash) {
+                    console.info(
+                        'Hash is consistent. Skipping. Use --force to override.',
+                    )
+                    return
+                }
+            }
+            await updateHash(root, depHash)
 
             if (
                 alreadyProcessed ||
@@ -145,4 +168,21 @@ function getPackageNameFromImportPath(importPath: string) {
         return parts.slice(0, 2).join('/')
     }
     return parts[0]
+}
+
+async function getDepHash(root: string) {
+    const lockfileLoc = await findUp(['package-lock.json', 'yarn.lock'], {
+        cwd: root,
+    })
+    if (!lockfileLoc) {
+        return
+    }
+    const content = await (await fsp.readFile(lockfileLoc, 'utf-8')).toString()
+    return createHash('sha1').update(content).digest('base64')
+}
+
+async function updateHash(root: string, newHash: string) {
+    const loc = path.join(root, hashPath)
+    await fsx.createFile(loc)
+    await fsx.writeFile(loc, newHash.trim())
 }

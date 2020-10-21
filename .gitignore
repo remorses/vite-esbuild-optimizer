@@ -21,6 +21,7 @@ lib-cov
 *.tsbuildinfo
 # Coverage directory used by tools like istanbul
 coverage
+.optimizer-hash
 
 # nyc test coverage
 .nyc_output
