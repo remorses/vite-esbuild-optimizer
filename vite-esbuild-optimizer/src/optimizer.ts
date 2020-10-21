@@ -4,6 +4,7 @@ import {
     traverseEsModules,
 } from 'es-module-traversal'
 import path from 'path'
+import url from 'url'
 import type { ServerPlugin, UserConfig } from 'vite'
 import { bundleWithEsBuild } from './esbuild'
 import { printStats } from './stats'
@@ -69,7 +70,19 @@ export function esbuildOptimizerPlugin({ entryPoints }): ServerPlugin {
                     .map((x) => {
                         const k = x.importPath //.replace(moduleRE, '')
                         const importPath = x.importPath.replace(moduleRE, '')
-                        const file = defaultResolver(root, importPath)
+                        let importerDir = path.posix.dirname(
+                            url.parse(x.importer).pathname,
+                        )
+                        importerDir = path.posix.join(
+                            // TODO handle fake paths like @modules or linked files
+                            root,
+                            importerDir.startsWith('/')
+                                ? importerDir.slice(1)
+                                : importerDir,
+                        )
+
+                        console.log({ importerDir })
+                        const file = defaultResolver(importerDir, importPath) // TODO resolve from importer folder, some files could have a nearer package.json with their respective node_modules
                         return {
                             [k]: file,
                         }

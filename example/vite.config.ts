@@ -12,23 +12,6 @@ module.exports = {
         esbuildOptimizerPlugin({ entryPoints: ['/main.tsx'] }),
         virtualHtmlPlugin({ entryPoint: '/main.tsx' }),
     ],
-    resolvers: [
-        {
-            alias(id) {
-                const isProd = process.env.NODE_ENV === 'production'
-                if (id === 'react' || id === '@pika/react') {
-                    return isProd
-                        ? '@pika/react'
-                        : '@pika/react/source.development.js'
-                }
-                if (id === 'react-dom' || id === '@pika/react-dom') {
-                    return isProd
-                        ? '@pika/react-dom'
-                        : '@pika/react-dom/source.development.js'
-                }
-            },
-        },
-    ],
 } as UserConfig
 
 function virtualHtmlPlugin({ entryPoint }) {

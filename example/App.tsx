@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import { SomeComponent } from 'example-linked-package'
 // axios is a commonjs package
 import { merge } from 'lodash-es'
+import React from 'react'
 // import { merge as m } from 'lodash'
 import Counter from './Counter'
-// import {SomeComponent} from 'some-react-components'
 
 merge({}, {})
 // m({}, {})
@@ -17,7 +17,7 @@ function App() {
             <br />
             <Counter />
             <hr />
-            {/* <SomeComponent/> */}
+            <SomeComponent/>
             <p>Some text</p>
         </div>
     )

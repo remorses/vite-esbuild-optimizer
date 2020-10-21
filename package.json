@@ -2,6 +2,7 @@
     "private": true,
     "workspaces": [
         "vite-esbuild-optimizer",
-        "example"
+        "example",
+        "example-linked-package"
     ]
 }
