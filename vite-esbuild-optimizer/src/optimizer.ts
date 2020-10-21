@@ -43,6 +43,14 @@ export function esbuildOptimizerPlugin({
                 // TODO redirect will not work with export if the extension of the compiled module is different than the old one
             }
 
+            if (
+                alreadyProcessed ||
+                !ctx.response.is('js') ||
+                !entryPoints.includes(ctx.url)
+            ) {
+                return
+            }
+
             const depHash = await getDepHash(root)
             if (!force) {
                 let prevHash = await fsp
@@ -59,13 +67,6 @@ export function esbuildOptimizerPlugin({
             }
             await updateHash(root, depHash)
 
-            if (
-                alreadyProcessed ||
-                !ctx.response.is('js') ||
-                !entryPoints.includes(ctx.url)
-            ) {
-                return
-            }
             console.info('Optimizing dependencies')
 
             alreadyProcessed = true
