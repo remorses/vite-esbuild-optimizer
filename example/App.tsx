@@ -3,7 +3,7 @@ import { SomeComponent } from 'example-linked-package'
 import { merge } from 'lodash-es'
 import React from 'react'
 // import { merge as m } from 'lodash'
-import Counter from './Counter'
+import Counter from './Counter/Counter'
 
 merge({}, {})
 // m({}, {})
@@ -17,7 +17,7 @@ function App() {
             <br />
             <Counter />
             <hr />
-            <SomeComponent/>
+            <SomeComponent />
             <p>Some text</p>
         </div>
     )

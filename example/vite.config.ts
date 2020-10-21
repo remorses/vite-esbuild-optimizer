@@ -9,7 +9,10 @@ module.exports = {
     },
     // plugins: [vpr],
     configureServer: [
-        esbuildOptimizerPlugin({ entryPoints: ['/main.tsx'] }),
+        esbuildOptimizerPlugin({
+            entryPoints: ['/main.tsx'],
+            link: ['example-linked-package'],
+        }),
         virtualHtmlPlugin({ entryPoint: '/main.tsx' }),
     ],
 } as UserConfig

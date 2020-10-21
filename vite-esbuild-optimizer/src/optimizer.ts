@@ -11,13 +11,17 @@ import { printStats } from './stats'
 
 const moduleRE = /^\/@modules\//
 
-export function esbuildOptimizerPlugin({ entryPoints }): ServerPlugin {
+export function esbuildOptimizerPlugin({
+    entryPoints,
+    link = [],
+}): ServerPlugin {
     // maps /@modules/module/index.js to /web_modules/module/index.js
     const webModulesResolutions = new Map<string, string>()
 
+    const linkedPackages = new Set(link)
     // TODO store an hash of lockfiles and last built dependencies to not optimize every time
     let alreadyProcessed = false
-    return ({ app, root, watcher }) => {
+    return ({ app, root, watcher, resolver }) => {
         const dest = path.join(root, 'web_modules')
 
         app.use(async (ctx, next) => {
@@ -45,6 +49,12 @@ export function esbuildOptimizerPlugin({ entryPoints }): ServerPlugin {
 
             const port = ctx.port
 
+            const isUserImportPath = (importPath: string) => {
+                return linkedPackages.has(
+                    importPath.replace(moduleRE, '').split('/')[0],
+                )
+            } // TODO continue traversing in linked deps, check if vite can always serve linked deps
+
             // serve react refresh runtime
             const traversalResult = await traverseEsModules({
                 entryPoints: entryPoints.map((entry) => {
@@ -54,8 +64,12 @@ export function esbuildOptimizerPlugin({ entryPoints }): ServerPlugin {
                     return `http://localhost:${port}/${entry}`
                 }),
                 stopTraversing: (importPath) => {
-                    return moduleRE.test(importPath) // TODO continue traversing in linked deps
+                    return (
+                        moduleRE.test(importPath) &&
+                        !isUserImportPath(importPath)
+                    )
                 },
+
                 ...makeServerFunctions({
                     // downloadFilesToDir: dest,
                     port,
@@ -66,23 +80,29 @@ export function esbuildOptimizerPlugin({ entryPoints }): ServerPlugin {
             const installEntrypoints = Object.assign(
                 {},
                 ...traversalResult
-                    .filter((x) => moduleRE.test(x.importPath)) // TODO remove linked deps? linked deps should be already optimized?
+                    .filter(
+                        (x) =>
+                            moduleRE.test(x.importPath) &&
+                            !isUserImportPath(x.importPath),
+                    ) // TODO remove linked deps? linked deps should be already optimized?
                     .map((x) => {
                         const k = x.importPath //.replace(moduleRE, '')
-                        const importPath = x.importPath.replace(moduleRE, '')
-                        let importerDir = path.posix.dirname(
-                            url.parse(x.importer).pathname,
-                        )
-                        importerDir = path.posix.join(
-                            // TODO handle fake paths like @modules or linked files
-                            root,
-                            importerDir.startsWith('/')
-                                ? importerDir.slice(1)
-                                : importerDir,
-                        )
 
+                        let importerDir = path.posix.dirname(
+                            resolver.requestToFile(
+                                // TODO does requestToFile always work?
+                                url.parse(x.importer).pathname,
+                            ),
+                        )
+                        // importerDir = path.posix.join(
+                        //     root,
+                        //     importerDir.startsWith('/')
+                        //         ? importerDir.slice(1)
+                        //         : importerDir,
+                        // )
+                        const importPath = x.importPath.replace(moduleRE, '')
                         console.log({ importerDir })
-                        const file = defaultResolver(importerDir, importPath) // TODO resolve from importer folder, some files could have a nearer package.json with their respective node_modules
+                        const file = defaultResolver(importerDir, importPath)
                         return {
                             [k]: file,
                         }
