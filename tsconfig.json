@@ -1,0 +1,6 @@
+{
+    "include": [],
+    "compilerOptions": { "composite": true,  },
+    
+    "references": [{ "path": "./vite-esbuild-optimizer" }]
+}

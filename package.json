@@ -1,0 +1,7 @@
+{
+    "private": true,
+    "workspaces": [
+        "vite-esbuild-optimizer",
+        "example"
+    ]
+}
