@@ -7,16 +7,11 @@
         "myvite": "node /Users/morse/Documents/GitHub/vite/bin/vite.js"
     },
     "dependencies": {
-        "@pika/react": "16.13.1",
-        "@pika/react-dom": "16.13.1",
-        "axios": "^0.20.0",
         "lodash-es": "^4.17.15"
     },
     "devDependencies": {
         "react": "16.13.1",
         "react-dom": "16.13.1",
-        "@types/react": "^16.9.53",
-        "vite": "^1.0.0-rc.4",
-        "vite-esbuild-optimizer": "*"
+        "@types/react": "^16.9.53"
     }
 }
