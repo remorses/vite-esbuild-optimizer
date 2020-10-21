@@ -51,9 +51,9 @@ export function esbuildOptimizerPlugin({
 
             const isLinkedImportPath = (importPath: string) => {
                 return linkedPackages.has(
-                    importPath.replace(moduleRE, '').split('/')[0],
+                    getPackageNameFromImportPath(importPath),
                 )
-            } // TODO continue traversing in linked deps, check if vite can always serve linked deps
+            }
 
             // serve react refresh runtime
             const traversalResult = await traverseEsModules({
@@ -79,7 +79,7 @@ export function esbuildOptimizerPlugin({
 
             const installEntrypoints = Object.assign(
                 {},
-                ...traversalResult
+                ...traversalResult // test that es module traversal removes queries from importPaths
                     .filter(
                         (x) =>
                             moduleRE.test(x.importPath) &&
@@ -137,4 +137,12 @@ export function esbuildOptimizerPlugin({
     // then use fileToRequestId to get the original importPath and create the entryPoints map
     // create the bundles and save them in root/web_modules
     // add the aliases to the resolver to point to the created web_modules files
+}
+
+function getPackageNameFromImportPath(importPath: string) {
+    const parts = importPath.replace(moduleRE, '').split('/')
+    if (parts[0].startsWith('@')) {
+        return parts.slice(0, 2).join('/')
+    }
+    return parts[0]
 }
