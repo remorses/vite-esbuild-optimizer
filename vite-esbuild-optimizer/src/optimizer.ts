@@ -25,7 +25,6 @@ export function esbuildOptimizerPlugin({
     const webModulesResolutions = new Map<string, string>()
 
     const linkedPackages = new Set(link)
-    // TODO store an hash of lockfiles and last built dependencies to not optimize every time
 
     let alreadyProcessed = false
     return ({ app, root, watcher, config, resolver }) => {

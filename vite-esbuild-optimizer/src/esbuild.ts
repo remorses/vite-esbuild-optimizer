@@ -114,7 +114,7 @@ function metafileToImportMap(_options: {
             }
             const inputs = Object.keys(meta.outputs[output].inputs).map((x) =>
                 path.resolve(x),
-            ) // TODO replace resolve with join in cwd
+            ) // TODO will this resolve work with pnp?
             const input = inputs.find((x) => inputFiles.includes(x))
             if (!input) {
                 return {}
@@ -153,9 +153,6 @@ function metafileToStats(_options: {
         return {
             [relativePath]: {
                 size: value.bytes,
-                gzip: 0, // TODO do we want to waste time compressing to show stats?
-                brotly: 0,
-                delta: 0,
                 // gzip: zlib.gzipSync(contents).byteLength,
                 // brotli: zlib.brotliCompressSync ? zlib.brotliCompressSync(contents).byteLength : 0,
             },
