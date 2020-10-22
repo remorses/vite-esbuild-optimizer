@@ -4,3 +4,4 @@
     
     "references": [{ "path": "./vite-esbuild-optimizer" }]
 }
+

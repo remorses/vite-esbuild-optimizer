@@ -3,6 +3,7 @@
     "workspaces": [
         "vite-esbuild-optimizer",
         "example",
-        "example-linked-package"
+        "example-linked-package",
+        "esbuild-polyfills"
     ]
 }
