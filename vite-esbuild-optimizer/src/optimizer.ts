@@ -14,11 +14,11 @@ import { bundleWithEsBuild } from './esbuild'
 import { printStats } from './stats'
 
 const moduleRE = /^\/@modules\//
-const hashPath = '.optimizer-hash'
+const HASH_FILE_NAME = '.optimizer-hash'
 
 export function esbuildOptimizerPlugin({
     entryPoints,
-    link = [],
+    link = [], // TODO auto detect linked deps using their resolved path and checking if it is inside a node_modules folder (does this also work for pnp?)
     force = false,
 }): ServerPlugin {
     // maps /@modules/module/index.js to /web_modules/module/index.js
@@ -29,7 +29,7 @@ export function esbuildOptimizerPlugin({
     let alreadyProcessed = false
     return ({ app, root, watcher, config, resolver }) => {
         const dest = path.join(root, 'web_modules')
-
+        const hashPath = path.join(dest, HASH_FILE_NAME)
         app.use(async (ctx, next) => {
             await next()
 
@@ -42,6 +42,7 @@ export function esbuildOptimizerPlugin({
                 // TODO redirect will not work with export if the extension of the compiled module is different than the old one
             }
 
+            // TODO do the optimization outside routes? to do this i need to know the port and have a way to know when app is listening
             if (
                 alreadyProcessed ||
                 !ctx.response.is('js') ||
@@ -63,7 +64,7 @@ export function esbuildOptimizerPlugin({
                     return
                 }
             }
-            await updateHash(root, depHash)
+            await updateHash(hashPath, depHash)
 
             console.info('Optimizing dependencies')
 
@@ -101,7 +102,7 @@ export function esbuildOptimizerPlugin({
 
             const installEntrypoints = Object.assign(
                 {},
-                ...traversalResult // TODO test that es module traversal removes queries from importPaths
+                ...traversalResult
                     .filter(
                         (x) =>
                             moduleRE.test(x.importPath) &&
@@ -177,13 +178,13 @@ async function getDepHash(root: string) {
         return
     }
     const content = await (await fsp.readFile(lockfileLoc, 'utf-8')).toString()
-    return createHash('sha1').update(content).digest('base64')
+    return createHash('sha1').update(content).digest('base64').trim()
 }
 
-async function updateHash(root: string, newHash: string) {
-    const loc = path.join(root, hashPath)
-    await fsx.createFile(loc)
-    await fsx.writeFile(loc, newHash.trim())
+async function updateHash(hashPath: string, newHash: string) {
+    console.log({hashPath})
+    await fsx.createFile(hashPath)
+    await fsx.writeFile(hashPath, newHash.trim())
 }
 
 const queryRE = /\?.*$/
