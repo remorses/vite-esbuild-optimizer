@@ -1,7 +1,9 @@
 {
     "include": [],
-    "compilerOptions": { "composite": true,  },
-    
-    "references": [{ "path": "./vite-esbuild-optimizer" }]
-}
+    "compilerOptions": { "composite": true },
 
+    "references": [
+        { "path": "./vite-esbuild-optimizer" },
+        { "path": "./esbuild-polyfills" }
+    ]
+}
