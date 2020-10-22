@@ -58,9 +58,7 @@ export function esbuildOptimizerPlugin({
 
                 // hash is consistent, no need to re-bundle
                 if (prevHash === depHash) {
-                    console.info(
-                        'Hash is consistent. Skipping optimization.',
-                    )
+                    console.info('Hash is consistent. Skipping optimization.')
                     alreadyProcessed = true
                     return
                 }
@@ -103,14 +101,14 @@ export function esbuildOptimizerPlugin({
 
             const installEntrypoints = Object.assign(
                 {},
-                ...traversalResult // test that es module traversal removes queries from importPaths
+                ...traversalResult // TODO test that es module traversal removes queries from importPaths
                     .filter(
                         (x) =>
                             moduleRE.test(x.importPath) &&
                             !isLinkedImportPath(x.importPath),
                     )
                     .map((x) => {
-                        const k = x.importPath //.replace(moduleRE, '')
+                        const cleanImportPath = cleanUrl(x.importPath) //.replace(moduleRE, '')
 
                         let importerDir = path.posix.dirname(
                             resolver.requestToFile(
@@ -124,11 +122,11 @@ export function esbuildOptimizerPlugin({
                         //         ? importerDir.slice(1)
                         //         : importerDir,
                         // )
-                        const importPath = x.importPath.replace(moduleRE, '')
+                        const importPath = cleanImportPath.replace(moduleRE, '')
                         console.log({ importerDir })
                         const file = defaultResolver(importerDir, importPath)
                         return {
-                            [k]: file,
+                            [cleanImportPath]: file,
                         }
                     }),
             )
@@ -186,4 +184,11 @@ async function updateHash(root: string, newHash: string) {
     const loc = path.join(root, hashPath)
     await fsx.createFile(loc)
     await fsx.writeFile(loc, newHash.trim())
+}
+
+const queryRE = /\?.*$/
+const hashRE = /#.*$/
+
+const cleanUrl = (url: string) => {
+    return url.replace(hashRE, '').replace(queryRE, '')
 }

@@ -1,5 +1,4 @@
 // @ts-no-check
-// TODO export here the process object, ...
 
 /* SNOWPACK PROCESS POLYFILL (based on https://github.com/calvinmetcalf/node-process-es6) */
 function defaultSetTimout() {
