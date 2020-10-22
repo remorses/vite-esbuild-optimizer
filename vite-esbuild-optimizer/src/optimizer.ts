@@ -171,7 +171,7 @@ function getPackageNameFromImportPath(importPath: string) {
 }
 
 async function getDepHash(root: string) {
-    const lockfileLoc = await findUp(['package-lock.json', 'yarn.lock'], {
+    const lockfileLoc = await findUp(['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'], {
         cwd: root,
     })
     if (!lockfileLoc) {
