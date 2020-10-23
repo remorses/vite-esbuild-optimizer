@@ -27,31 +27,11 @@ export function esbuildOptimizerPlugin({
 
     const linkedPackages = new Set(link)
 
-    let alreadyProcessed = false
-    return ({ app, root, watcher, config, resolver }) => {
+    return ({ app, root, watcher, config, resolver, server }) => {
         const dest = path.join(root, 'web_modules')
         const hashPath = path.join(dest, HASH_FILE_NAME)
-        app.use(async (ctx, next) => {
-            await next()
 
-            if (webModulesResolutions.has(ctx.path)) {
-                ctx.type = 'js'
-                const resolved = webModulesResolutions.get(ctx.path)
-                console.info(ctx.path, '-->', resolved)
-                ctx.redirect(resolved) // redirect will change referer and resolutions to relative imports will work correctly
-                // redirect will also work in export because all relative imports will be converted to absolute paths by the server
-                // TODO redirect will not work with export if the extension of the compiled module is different than the old one
-            }
-
-            // TODO do the optimization outside routes? to do this i need to know the port and have a way to know when app is listening
-            if (
-                alreadyProcessed ||
-                !ctx.response.is('js') ||
-                !entryPoints.includes(ctx.url)
-            ) {
-                return
-            }
-
+        server.on('listening', async () => {
             const depHash = await getDepHash(root)
             if (!force) {
                 let prevHash = await fsp
@@ -61,7 +41,6 @@ export function esbuildOptimizerPlugin({
                 // hash is consistent, no need to re-bundle
                 if (prevHash === depHash) {
                     console.info('Hash is consistent. Skipping optimization.')
-                    alreadyProcessed = true
                     return
                 }
             }
@@ -69,9 +48,7 @@ export function esbuildOptimizerPlugin({
 
             console.info('Optimizing dependencies')
 
-            alreadyProcessed = true
-
-            const port = ctx.server.address()['port']
+            const port = server.address()['port']
 
             const isLinkedImportPath = (importPath: string) => {
                 return linkedPackages.has(
@@ -152,14 +129,22 @@ export function esbuildOptimizerPlugin({
             })
 
             console.info(printStats(stats))
+            console.info('Optimized dependencies\n')
+        })
+
+        app.use(async (ctx, next) => {
+            await next()
+
+            if (webModulesResolutions.has(ctx.path)) {
+                ctx.type = 'js'
+                const resolved = webModulesResolutions.get(ctx.path)
+                console.info(ctx.path, '-->', resolved)
+                ctx.redirect(resolved) // redirect will change referer and resolutions to relative imports will work correctly
+                // redirect will also work in export because all relative imports will be converted to absolute paths by the server
+                // TODO redirect will not work with export if the extension of the compiled module is different than the old one
+            }
         })
     }
-    // Plugin
-    // add the plugin at the end of middleware
-    // when the first request comes in, start taking all the imports using the traverser
-    // then use fileToRequestId to get the original importPath and create the entryPoints map
-    // create the bundles and save them in root/web_modules
-    // add the aliases to the resolver to point to the created web_modules files
 }
 
 function getPackageNameFromImportPath(importPath: string) {
@@ -196,3 +181,5 @@ const hashRE = /#.*$/
 const cleanUrl = (url: string) => {
     return url.replace(hashRE, '').replace(queryRE, '')
 }
+
+const sleep = (t) => new Promise((res) => setTimeout(res, t))
