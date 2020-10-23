@@ -103,7 +103,6 @@ export function esbuildOptimizerPlugin({
                         //         : importerDir,
                         // )
                         const importPath = cleanImportPath.replace(moduleRE, '')
-                        console.log({ importerDir })
                         const file = defaultResolver(importerDir, importPath)
                         return {
                             [cleanImportPath]: file,
@@ -172,7 +171,6 @@ async function getDepHash(root: string) {
 }
 
 async function updateHash(hashPath: string, newHash: string) {
-    console.log({ hashPath })
     await fsx.createFile(hashPath)
     await fsx.writeFile(hashPath, newHash.trim())
 }
