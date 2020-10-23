@@ -92,7 +92,6 @@ export function esbuildOptimizerPlugin({
                         // TODO here i get paths with an added .js extension 
                         let importerDir = path.dirname(
                             resolver.requestToFile( // TODO request to file should handle the added .js extension
-                                // TODO does requestToFile always work?
                                 url.parse(x.importer).path, // .replace(moduleRE, ''),
                             ),
                         )
@@ -103,7 +102,7 @@ export function esbuildOptimizerPlugin({
                         //         : importerDir,
                         // )
                         const importPath = cleanImportPath.replace(moduleRE, '')
-                        const file = defaultResolver(importerDir, importPath)
+                        const file = defaultResolver(importerDir, importPath) // TODO what if this file is outside root, how deep will the web_modules folder? will it work?
                         return {
                             [cleanImportPath]: file,
                         }
@@ -156,6 +155,7 @@ function getPackageNameFromImportPath(importPath: string) {
     return parts[0]
 }
 
+// hash assumes that import paths can only grow when installed dependencies grow, this is not the case for deep paths like `lodash/path`, in these cases you will need to use `--force`
 async function getDepHash(root: string) {
     const lockfileLoc = await findUp(
         ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'],
