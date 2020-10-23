@@ -88,10 +88,12 @@ export function esbuildOptimizerPlugin({
                     .map((x) => {
                         const cleanImportPath = cleanUrl(x.importPath) //.replace(moduleRE, '')
 
-                        let importerDir = path.posix.dirname(
+                        // console.log(url.parse(x.importer).pathname)
+                        // TODO here i get paths with an added .js extension 
+                        let importerDir = path.dirname(
                             resolver.requestToFile(
                                 // TODO does requestToFile always work?
-                                url.parse(x.importer).pathname,
+                                url.parse(x.importer).pathname, // .replace(moduleRE, ''),
                             ),
                         )
                         // importerDir = path.posix.join(
