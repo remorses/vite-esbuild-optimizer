@@ -82,7 +82,7 @@ export function esbuildOptimizerPlugin({
                 ...traversalResult
                     .filter(
                         (x) =>
-                            moduleRE.test(x.importPath) &&
+                            moduleRE.test(x.importPath) && // TODO paths here could have an added js extension // TODO only add the js extension if exporting to outer directory
                             !isLinkedImportPath(x.importPath),
                     )
                     .map((x) => {
@@ -91,9 +91,9 @@ export function esbuildOptimizerPlugin({
                         // console.log(url.parse(x.importer).pathname)
                         // TODO here i get paths with an added .js extension 
                         let importerDir = path.dirname(
-                            resolver.requestToFile(
+                            resolver.requestToFile( // TODO request to file should handle the added .js extension
                                 // TODO does requestToFile always work?
-                                url.parse(x.importer).pathname, // .replace(moduleRE, ''),
+                                url.parse(x.importer).path, // .replace(moduleRE, ''),
                             ),
                         )
                         // importerDir = path.posix.join(
