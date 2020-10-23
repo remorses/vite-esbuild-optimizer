@@ -1,7 +1,8 @@
 import {
     defaultResolver,
-    makeServerFunctions,
+    readFromUrlOrPath,
     traverseEsModules,
+    urlResolver,
 } from 'es-module-traversal'
 import path from 'path'
 import fsx from 'fs-extra'
@@ -70,7 +71,7 @@ export function esbuildOptimizerPlugin({
 
             alreadyProcessed = true
 
-            const port = ctx.port
+            const port = ctx.server.address()['port']
 
             const isLinkedImportPath = (importPath: string) => {
                 return linkedPackages.has(
@@ -92,12 +93,11 @@ export function esbuildOptimizerPlugin({
                         !isLinkedImportPath(importPath)
                     )
                 },
-
-                ...makeServerFunctions({
-                    // downloadFilesToDir: dest,
-                    port,
+                resolver: urlResolver({
                     root: path.resolve(root),
+                    baseUrl: `http://localhost:${port}`,
                 }),
+                readFile: readFromUrlOrPath,
             })
 
             const installEntrypoints = Object.assign(
@@ -171,9 +171,12 @@ function getPackageNameFromImportPath(importPath: string) {
 }
 
 async function getDepHash(root: string) {
-    const lockfileLoc = await findUp(['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'], {
-        cwd: root,
-    })
+    const lockfileLoc = await findUp(
+        ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'],
+        {
+            cwd: root,
+        },
+    )
     if (!lockfileLoc) {
         return
     }
@@ -182,7 +185,7 @@ async function getDepHash(root: string) {
 }
 
 async function updateHash(hashPath: string, newHash: string) {
-    console.log({hashPath})
+    console.log({ hashPath })
     await fsx.createFile(hashPath)
     await fsx.writeFile(hashPath, newHash.trim())
 }
