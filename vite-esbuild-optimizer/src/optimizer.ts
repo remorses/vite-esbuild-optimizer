@@ -140,8 +140,8 @@ export function esbuildOptimizerPlugin({
                 const resolved = webModulesResolutions.get(ctx.path)
                 console.info(ctx.path, '-->', resolved)
                 ctx.redirect(resolved) // redirect will change referer and resolutions to relative imports will work correctly
-                // redirect will also work in export because all relative imports will be converted to absolute paths by the server
-                // TODO redirect will not work with export if the extension of the compiled module is different than the old one
+                // redirect will also work in export because all relative imports will be converted to absolute paths by the server, ot does not matter the location of the optimized module, all imports will be rewritten to be absolute
+                // TODO redirect will not work with export if the extension of the compiled module is different than the old one?
             }
         })
     }
