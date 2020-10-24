@@ -37,7 +37,7 @@
     },
     "dependencies": {
         "chalk": "^4.1.0",
-        "es-module-traversal": "^0.0.15",
+        "es-module-traversal": "^0.0.30",
         "esbuild": "0.7.15",
         "find-up": "^5.0.0",
         "fs-extra": "^9.0.1",

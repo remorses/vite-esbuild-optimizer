@@ -31,7 +31,7 @@ export function esbuildOptimizerPlugin({
         const dest = path.join(root, 'web_modules')
         const hashPath = path.join(dest, HASH_FILE_NAME)
 
-        server.on('listening', async () => {
+        server.once('listening', async () => {
             const depHash = await getDepHash(root)
             if (!force) {
                 let prevHash = await fsp

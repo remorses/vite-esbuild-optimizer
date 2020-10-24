@@ -906,10 +906,10 @@ es-module-lexer@^0.3.18, es-module-lexer@^0.3.25:
   resolved "https://registry.yarnpkg.com/es-module-lexer/-/es-module-lexer-0.3.25.tgz#24a1abcb9c5dc96923a8e42be033b801f788de06"
   integrity sha512-H9VoFD5H9zEfiOX2LeTWDwMvAbLqcAyA2PIb40TOAvGpScOjit02oTGWgIh+M0rx2eJOKyJVM9wtpKFVgnyC3A==
 
-es-module-traversal@^0.0.15:
-  version "0.0.15"
-  resolved "https://registry.yarnpkg.com/es-module-traversal/-/es-module-traversal-0.0.15.tgz#5664bc313059c6e91cfe29361b421119a464ca8e"
-  integrity sha512-NK71jdeVt/CQiweqYTlBfGCU+No0iVzRHWa9qx6egIBqMDOoPtYVRofWZbFIZkH2hw7ez8VWVPPannqJh1ztEA==
+es-module-traversal@^0.0.30:
+  version "0.0.30"
+  resolved "https://registry.yarnpkg.com/es-module-traversal/-/es-module-traversal-0.0.30.tgz#45853c43ff33e86eaa24ccec9abf89c316e2ad75"
+  integrity sha512-P0D20iIJ349fbuDFwEZzyD/OuT2saT8hBItMgtcorHu/Kc1k4cQrmjELDWKN6tpjquHzdztXprPFq1eiF0XN2Q==
   dependencies:
     batched-promise-all "^0.9.2"
     debug "^4.2.0"
