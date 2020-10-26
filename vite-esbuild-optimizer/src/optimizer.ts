@@ -1,3 +1,5 @@
+import rimraf from 'rimraf'
+import { EventEmitter, once } from 'events'
 import {
     defaultResolver,
     readFromUrlOrPath,
@@ -19,6 +21,7 @@ import { printStats } from './stats'
 const moduleRE = /^\/@modules\//
 const HASH_FILE_NAME = '.optimizer-hash'
 const DO_NOT_OPTIMIZE = 'DO_NOT_OPTIMIZE'
+const READY_EVENT = 'READY_EVENT'
 const CACHE_FILE = 'cached.json' // TODO do i want to cache entrypoints or resolution map?
 
 type Cache = {
@@ -45,6 +48,8 @@ export function esbuildOptimizerPlugin({
 
         const hashPath = path.join(dest, HASH_FILE_NAME)
 
+        let ready = new EventEmitter()
+
         server.once('listening', async () => {
             const depHash = await getDepHash(root)
             if (!force) {
@@ -56,6 +61,7 @@ export function esbuildOptimizerPlugin({
                 if (prevHash === depHash) {
                     console.info('Hash is consistent. Skipping optimization.')
                     // TODO check that every bindle in resolution map exists on disk, if not rerun optimization
+                    ready.emit(READY_EVENT)
                     return
                 }
             }
@@ -93,6 +99,7 @@ export function esbuildOptimizerPlugin({
                 requestToFile: resolver.requestToFile,
                 imports: traversalResult,
             })
+            rimraf.sync(dest)
             const { importMap, stats } = await bundleWithEsBuild({
                 dest,
                 installEntrypoints,
@@ -114,9 +121,16 @@ export function esbuildOptimizerPlugin({
 
             console.info(printStats(stats))
             console.info('Optimized dependencies\n')
+            ready.emit(READY_EVENT)
         })
 
+        let hasWaited = false
         app.use(async (ctx, next) => {
+            if (ctx.url === '/index.html' && !hasWaited) { // TODO use special request header to not make the url resolver wait
+                await once(ready, READY_EVENT)
+            }
+            hasWaited = true // TODO set ready to false every time we start bundling so that if same module is requested at the sae time it is not rebuilt 2 times or different files do not overwrite the result maps
+
             await next()
 
             function redirect() {
