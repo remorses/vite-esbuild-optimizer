@@ -23,7 +23,7 @@ export function esbuildOptimizerPlugin({
     force = false,
 }): ServerPlugin {
     // maps /@modules/module/index.js to /web_modules/module/index.js
-    const webModulesResolutions = new Map<string, string>()
+    const webModulesResolutions = new Map<string, string>() // TODO read the resolution map from disk cache
 
     const linkedPackages = new Set(link)
 
@@ -41,6 +41,7 @@ export function esbuildOptimizerPlugin({
                 // hash is consistent, no need to re-bundle
                 if (prevHash === depHash) {
                     console.info('Hash is consistent. Skipping optimization.')
+                    // TODO check that every bindle in resolution map exists on disk, if not rerun optimization
                     return
                 }
             }
@@ -135,6 +136,7 @@ export function esbuildOptimizerPlugin({
         app.use(async (ctx, next) => {
             await next()
 
+            
             if (webModulesResolutions.has(ctx.path)) {
                 ctx.type = 'js'
                 const resolved = webModulesResolutions.get(ctx.path)
@@ -142,8 +144,12 @@ export function esbuildOptimizerPlugin({
                 ctx.redirect(resolved) // redirect will change referer and resolutions to relative imports will work correctly
                 // redirect will also work in export because all relative imports will be converted to absolute paths by the server, ot does not matter the location of the optimized module, all imports will be rewritten to be absolute
                 // TODO redirect will not work with export if the extension of the compiled module is different than the old one?
+            } else {
+                // TODO check if the resolved path points to a node_modules file (not relative and not a linked package), if yes restart optimization of dependencies with the missing import paths
             }
         })
+
+
     }
 }
 
