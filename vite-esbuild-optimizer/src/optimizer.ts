@@ -115,7 +115,7 @@ export function esbuildOptimizerPlugin({
             } else {
                 console.log(ctx.path)
                 if (
-                    ctx.query.DO_NOT_OPTIMIZE != null &&
+                    ctx.query[DO_NOT_OPTIMIZE] != null &&
                     moduleRE.test(ctx.path) &&
                     resolver
                         .requestToFile(resolver.requestToFile(ctx.path))
