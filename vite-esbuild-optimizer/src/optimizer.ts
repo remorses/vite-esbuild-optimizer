@@ -115,7 +115,7 @@ export function esbuildOptimizerPlugin({
             } else {
                 console.log(ctx.path)
                 if (
-                    ctx.query[DO_NOT_OPTIMIZE] != null &&
+                    ctx.query[DO_NOT_OPTIMIZE] == null &&
                     moduleRE.test(ctx.path) &&
                     resolver
                         .requestToFile(resolver.requestToFile(ctx.path))
@@ -135,13 +135,13 @@ export function esbuildOptimizerPlugin({
                     const res = await traverseEsModules({
                         entryPoints: [entry],
                         stopTraversing: () => true,
-                        readFile: readFromUrlOrPath, // TODO send a special query that stops the server from trying to optimize again to not recurse indefinitely
+                        readFile: readFromUrlOrPath,
                         resolver: urlResolver({
                             baseUrl,
                             root,
                         }),
                     })
-                    console.log({ res })
+                    // console.log({ res })
                     const newEntrypoints = makeEntrypoints({
                         isLinkedImportPath,
                         requestToFile: resolver.requestToFile,
