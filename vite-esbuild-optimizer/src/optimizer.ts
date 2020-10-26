@@ -147,7 +147,7 @@ export function esbuildOptimizerPlugin({
                         requestToFile: resolver.requestToFile,
                         traversalResult: res,
                     })
-                    const { importMap, stats } = await bundleWithEsBuild({
+                    const { importMap, stats } = await bundleWithEsBuild({ // make esbuild build incrementally
                         dest,
                         installEntrypoints: {
                             ...installEntrypoints,
