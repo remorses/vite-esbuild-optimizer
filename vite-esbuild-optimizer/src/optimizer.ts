@@ -142,7 +142,7 @@ export function esbuildOptimizerPlugin({
                     const port = ctx.server.address()['port']
                     const baseUrl = `http://localhost:${port}`
                     const entry = addQuery({
-                        url: new URL(ctx.path, baseUrl), // TODO make this better, reuse already existing query
+                        urlString: new URL(ctx.path, baseUrl).toString(), // TODO make this better, reuse already existing query
                         query: DO_NOT_OPTIMIZE,
                     })
                     console.log({ entry })
@@ -209,9 +209,11 @@ function importMapToResolutionsMap({ importMap, dest, root }) {
     return resolutionsMap
 }
 
-function addQuery({ url = new URL(''), query }) {
-    url.search = '?' + query
-    return url.toString()
+export function addQuery({ urlString, query }) {
+    const parsed = new URL(urlString)
+    // console.log({ parsed })
+    parsed.searchParams.append(query, '')
+    return parsed.toString()
 }
 
 function makeEntrypoints({

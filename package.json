@@ -1,5 +1,6 @@
 {
     "private": true,
+    
     "workspaces": [
         "vite-esbuild-optimizer",
         "example",
@@ -7,6 +8,10 @@
         "esbuild-polyfills"
     ],
     "scripts": {
-        "watch": "tsc -b -w"
+        "watch": "tsc -b -w",
+        "test": "jest"
+    },
+    "devDependencies": {
+        "jest": "^26.6.1"
     }
 }
