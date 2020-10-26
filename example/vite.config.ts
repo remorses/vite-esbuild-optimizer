@@ -11,7 +11,7 @@ module.exports = {
     configureServer: [
         esbuildOptimizerPlugin({
             entryPoints: ['/main.tsx'],
-            link: ['example-linked-package'],
+            // link: ['example-linked-package'],
             force: true,
         }),
         virtualHtmlPlugin({ entryPoint: '/main.tsx' }),

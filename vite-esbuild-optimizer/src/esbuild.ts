@@ -39,8 +39,6 @@ export async function bundleWithEsBuild({
         // sourcemap: 'inline', // TODO sourcemaps panics and gives a lot of CPU load
         define: {
             'process.env.NODE_ENV': JSON.stringify('dev'),
-            process: 'window', // TODO temporary workarounds to make certain packages work
-            'process.env': 'window',
             global: 'window',
             ...generateEnvReplacements(env),
         },

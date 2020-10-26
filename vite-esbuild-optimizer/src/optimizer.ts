@@ -22,7 +22,7 @@ const moduleRE = /^\/@modules\//
 const HASH_FILE_NAME = '.optimizer-hash'
 const DO_NOT_OPTIMIZE = 'DO_NOT_OPTIMIZE'
 const READY_EVENT = 'READY_EVENT'
-const CACHE_FILE = 'cached.json' // TODO do i want to cache entrypoints or resolution map?
+const CACHE_FILE = 'cached.json'
 
 type Cache = {
     webModulesResolutions: Record<string, string>
@@ -31,16 +31,11 @@ type Cache = {
 
 export function esbuildOptimizerPlugin({
     entryPoints,
-    link = [], // TODO auto detect linked deps using their resolved path and checking if it is inside a node_modules folder (does this also work for pnp?)
     force = false,
 }): ServerPlugin {
     // maps /@modules/module/index.js to /web_modules/module/index.js
 
-    const linkedPackages = new Set(link)
-
-    const isLinkedImportPath = (importPath: string) => {
-        return linkedPackages.has(getPackageNameFromImportPath(importPath))
-    }
+    // const linkedPackages = new Set(link)
 
     return ({ app, root, watcher, config, resolver, server }) => {
         const dest = path.join(root, 'web_modules')
@@ -60,7 +55,7 @@ export function esbuildOptimizerPlugin({
                 // hash is consistent, no need to re-bundle
                 if (prevHash === depHash) {
                     console.info('Hash is consistent. Skipping optimization.')
-                    // TODO check that every bindle in resolution map exists on disk, if not rerun optimization
+                    // TODO check that every bundle in resolution map exists on disk, if not rerun optimization
                     ready.emit(READY_EVENT)
                     return
                 }
@@ -86,16 +81,16 @@ export function esbuildOptimizerPlugin({
                 stopTraversing: (importPath) => {
                     return (
                         moduleRE.test(importPath) &&
-                        !isLinkedImportPath(importPath)
+                        isNodeModule(resolver.requestToFile(importPath)) // TODO memoize requesttofile calls
                     )
                 },
                 resolver: localUrlResolver,
                 readFile: readFromUrlOrPath,
             })
 
-            // TODO i dont like this mutation
+            // console.log({traversalResult})
+
             installEntrypoints = makeEntrypoints({
-                isLinkedImportPath,
                 requestToFile: resolver.requestToFile,
                 imports: traversalResult,
             })
@@ -126,7 +121,8 @@ export function esbuildOptimizerPlugin({
 
         let hasWaited = false
         app.use(async (ctx, next) => {
-            if (ctx.url === '/index.html' && !hasWaited) { // TODO use special request header to not make the url resolver wait
+            if (ctx.url === '/index.html' && !hasWaited) {
+                // TODO use special request header to not make the url resolver wait
                 await once(ready, READY_EVENT)
             }
             hasWaited = true // TODO set ready to false every time we start bundling so that if same module is requested at the sae time it is not rebuilt 2 times or different files do not overwrite the result maps
@@ -135,7 +131,7 @@ export function esbuildOptimizerPlugin({
 
             function redirect() {
                 ctx.type = 'js'
-                ctx.redirect(cleanUrl(webModulesResolutions[ctx.path])) // TODO do not clean completely, instead remove only DO_NOT_OPTIMIZE
+                ctx.redirect(cleanUrl(webModulesResolutions[ctx.path]))
             }
             // console.log({webModulesResolutions})
 
@@ -145,12 +141,11 @@ export function esbuildOptimizerPlugin({
                 console.log(ctx.path)
 
                 // try to rebundle dependencies if an import path is not found
+                const resolvedPath = resolver.requestToFile(ctx.path)
                 if (
                     ctx.query[DO_NOT_OPTIMIZE] == null &&
                     moduleRE.test(ctx.path) &&
-                    resolver
-                        .requestToFile(resolver.requestToFile(ctx.path))
-                        .includes('node_modules') // TODO better check if path is inside node_modules
+                    isNodeModule(resolvedPath)
                 ) {
                     // console.log({ p: resolver.requestToFile(ctx.path) })
                     console.info(`trying to optimize module for ${ctx.path}`)
@@ -166,8 +161,8 @@ export function esbuildOptimizerPlugin({
                     // get the imports and rerun optimization
                     // const port = ctx.server.address()['port']
                     // const baseUrl = `http://localhost:${port}`
-                    // const entry = addQuery({ // TODO entry is the referer
-                    //     urlString: new URL(ctx.path, baseUrl).toString(), // TODO make this better, reuse already existing query
+                    // const entry = addQuery({
+                    //     urlString: new URL(ctx.path, baseUrl).toString(),
                     //     query: DO_NOT_OPTIMIZE,
                     // })
                     // console.log({ entry })
@@ -181,12 +176,12 @@ export function esbuildOptimizerPlugin({
                     //     }),
                     // })
                     const newEntrypoints = makeEntrypoints({
-                        isLinkedImportPath,
                         requestToFile: resolver.requestToFile,
                         imports: [
                             {
                                 importPath: ctx.path,
                                 importer,
+                                resolvedImportPath: resolvedPath,
                             },
                         ],
                     })
@@ -213,7 +208,7 @@ export function esbuildOptimizerPlugin({
                         dest,
                     })
 
-                    console.log({ webModulesResolutions, path: ctx.path })
+                    // console.log({ webModulesResolutions, path: ctx.path })
 
                     console.info(printStats(stats))
                     console.info('Optimized dependencies\n')
@@ -251,19 +246,18 @@ export function addQuery({ urlString, query }) {
 function makeEntrypoints({
     imports,
     requestToFile,
-    isLinkedImportPath,
 }: {
-    imports: Pick<ResultType, 'importPath' | 'importer'>[]
+    imports: ResultType[]
     requestToFile: Function
-    isLinkedImportPath
 }) {
     const installEntrypoints = Object.assign(
         {},
         ...imports
             .filter(
                 (x) =>
-                    moduleRE.test(x.importPath) && // TODO paths here could have an added js extension // TODO only add the js extension if exporting to outer directory
-                    !isLinkedImportPath(x.importPath),
+                    moduleRE.test(x.importPath) && // TODO paths here could have an added js extension
+                    // TODO only add the js extension if exporting to outer directory
+                    isNodeModule(requestToFile(x.importPath)),
             )
             .map((x) => {
                 const cleanImportPath = cleanUrl(x.importPath) //.replace(moduleRE, '')
@@ -290,6 +284,12 @@ function makeEntrypoints({
             }),
     )
     return installEntrypoints
+}
+
+function isNodeModule(p: string) {
+    const res = p.includes('node_modules')
+    // console.log({ isNodeModule: res, p })
+    return res
 }
 
 function formatPathToUrl({ entry, baseUrl }) {
