@@ -29,7 +29,7 @@ type Cache = {
     installEntrypoints: Record<string, string>
 }
 
-export function esbuildOptimizerPlugin({
+export function esbuildOptimizerServerPlugin({
     entryPoints,
     force = false,
 }): ServerPlugin {

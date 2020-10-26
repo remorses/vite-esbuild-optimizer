@@ -7,15 +7,14 @@ module.exports = {
         auto: false,
         // link: ['package-b', 'some-react-components'],
     },
-    // plugins: [vpr],
-    configureServer: [
+    plugins: [
         esbuildOptimizerPlugin({
             entryPoints: ['/main.tsx'],
             // link: ['example-linked-package'],
             force: true,
         }),
-        virtualHtmlPlugin({ entryPoint: '/main.tsx' }),
     ],
+    configureServer: [virtualHtmlPlugin({ entryPoint: '/main.tsx' })],
 } as UserConfig
 
 function virtualHtmlPlugin({ entryPoint }) {
