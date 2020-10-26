@@ -9,7 +9,7 @@ import fsx from 'fs-extra'
 import findUp from 'find-up'
 import { createHash } from 'crypto'
 import { promises as fsp } from 'fs'
-import url from 'url'
+import url, { URL } from 'url'
 import type { ServerPlugin, UserConfig } from 'vite'
 import { bundleWithEsBuild } from './esbuild'
 import { printStats } from './stats'
@@ -23,9 +23,15 @@ export function esbuildOptimizerPlugin({
     force = false,
 }): ServerPlugin {
     // maps /@modules/module/index.js to /web_modules/module/index.js
-    const webModulesResolutions = new Map<string, string>() // TODO read the resolution map from disk cache
+    let webModulesResolutions = new Map<string, string>() // TODO read the resolution map from disk cache
 
     const linkedPackages = new Set(link)
+
+    const isLinkedImportPath = (importPath: string) => {
+        return linkedPackages.has(getPackageNameFromImportPath(importPath))
+    }
+
+    let installEntrypoints = {}
 
     return ({ app, root, watcher, config, resolver, server }) => {
         const dest = path.join(root, 'web_modules')
@@ -51,82 +57,43 @@ export function esbuildOptimizerPlugin({
 
             const port = server.address()['port']
 
-            const isLinkedImportPath = (importPath: string) => {
-                return linkedPackages.has(
-                    getPackageNameFromImportPath(importPath),
-                )
-            }
+            const baseUrl = `http://localhost:${port}`
+
+            const localUrlResolver = urlResolver({
+                root: path.resolve(root),
+                baseUrl,
+            })
 
             // serve react refresh runtime
             const traversalResult = await traverseEsModules({
-                entryPoints: entryPoints.map((entry) => {
-                    entry = entry.startsWith('/')
-                        ? entry.slice(1)
-                        : path.posix.normalize(entry)
-                    return `http://localhost:${port}/${entry}`
-                }),
+                entryPoints: entryPoints.map((entry) =>
+                    formatPathToUrl({ baseUrl, entry }),
+                ),
                 stopTraversing: (importPath) => {
                     return (
                         moduleRE.test(importPath) &&
                         !isLinkedImportPath(importPath)
                     )
                 },
-                resolver: urlResolver({
-                    root: path.resolve(root),
-                    baseUrl: `http://localhost:${port}`,
-                }),
+                resolver: localUrlResolver,
                 readFile: readFromUrlOrPath,
             })
 
-            const installEntrypoints = Object.assign(
-                {},
-                ...traversalResult
-                    .filter(
-                        (x) =>
-                            moduleRE.test(x.importPath) && // TODO paths here could have an added js extension // TODO only add the js extension if exporting to outer directory
-                            !isLinkedImportPath(x.importPath),
-                    )
-                    .map((x) => {
-                        const cleanImportPath = cleanUrl(x.importPath) //.replace(moduleRE, '')
-
-                        // console.log(url.parse(x.importer).pathname)
-                        // TODO here i get paths with an added .js extension 
-                        let importerDir = path.dirname(
-                            resolver.requestToFile( // TODO request to file should handle the added .js extension
-                                url.parse(x.importer).path, // .replace(moduleRE, ''),
-                            ),
-                        )
-                        // importerDir = path.posix.join(
-                        //     root,
-                        //     importerDir.startsWith('/')
-                        //         ? importerDir.slice(1)
-                        //         : importerDir,
-                        // )
-                        const importPath = cleanImportPath.replace(moduleRE, '')
-                        const file = defaultResolver(importerDir, importPath) // TODO what if this file is outside root, how deep will the web_modules folder? will it work?
-                        return {
-                            [cleanImportPath]: file,
-                        }
-                    }),
-            )
-
-            // console.log({ installEntrypoints })
+            // TODO i dont like this mutation
+            installEntrypoints = makeEntrypoints({
+                isLinkedImportPath,
+                requestToFile: resolver.requestToFile,
+                traversalResult,
+            })
             const { importMap, stats } = await bundleWithEsBuild({
                 dest,
                 installEntrypoints,
             })
 
-            Object.keys(importMap.imports).forEach((importPath) => {
-                let resolvedFile = path.posix.resolve(
-                    dest,
-                    importMap.imports[importPath],
-                )
-
-                // make url always /web_modules/...
-                resolvedFile = '/' + path.posix.relative(root, resolvedFile)
-
-                // console.log(importPath, '-->', resolvedFile)
-                webModulesResolutions.set(importPath, resolvedFile)
+            webModulesResolutions = importMapToResolutionsMap({
+                dest,
+                importMap,
+                root,
             })
 
             console.info(printStats(stats))
@@ -135,8 +102,8 @@ export function esbuildOptimizerPlugin({
 
         app.use(async (ctx, next) => {
             await next()
+            // console.log({webModulesResolutions})
 
-            
             if (webModulesResolutions.has(ctx.path)) {
                 ctx.type = 'js'
                 const resolved = webModulesResolutions.get(ctx.path)
@@ -145,12 +112,119 @@ export function esbuildOptimizerPlugin({
                 // redirect will also work in export because all relative imports will be converted to absolute paths by the server, ot does not matter the location of the optimized module, all imports will be rewritten to be absolute
                 // TODO redirect will not work with export if the extension of the compiled module is different than the old one?
             } else {
+                console.log(ctx.path)
                 // TODO check if the resolved path points to a node_modules file (not relative and not a linked package), if yes restart optimization of dependencies with the missing import paths
+                if (
+                    moduleRE.test(ctx.path) &&
+                    resolver
+                        .requestToFile(resolver.requestToFile(ctx.path))
+                        .includes('node_modules')
+                ) {
+                    // console.log({ p: resolver.requestToFile(ctx.path) })
+                    console.info(`trying to optimize module for ${ctx.path}`)
+                    // TODO better check if path is inside node_modules
+                    // get the imports and rerun optimization
+                    const port = ctx.server.address()['port']
+                    const baseUrl = `http://localhost:${port}`
+                    const res = await traverseEsModules({
+                        entryPoints: [
+                            formatPathToUrl({ baseUrl, entry: ctx.path }),
+                        ],
+                        stopTraversing: () => true,
+                        readFile: readFromUrlOrPath, // TODO send a special query that stops the server from trying to optimize again to not recurse indefinitely
+                        resolver: urlResolver({
+                            baseUrl,
+                            root,
+                        }),
+                    })
+                    console.log({res})
+                    // TODO abstract THIS?
+                    const newEntrypoints = makeEntrypoints({
+                        isLinkedImportPath,
+                        requestToFile: resolver.requestToFile,
+                        traversalResult: res,
+                    })
+                    const { importMap, stats } = await bundleWithEsBuild({
+                        dest,
+                        installEntrypoints: {
+                            ...installEntrypoints,
+                            ...newEntrypoints,
+                        },
+                    })
+                    webModulesResolutions = importMapToResolutionsMap({
+                        dest,
+                        importMap,
+                        root,
+                    })
+
+                    console.info(printStats(stats))
+                    console.info('Optimized dependencies\n')
+                }
             }
         })
-
-
     }
+}
+
+function importMapToResolutionsMap({ importMap, dest, root }) {
+    const resolutionsMap = new Map<string, string>()
+    Object.keys(importMap.imports).forEach((importPath) => {
+        let resolvedFile = path.posix.resolve(
+            dest,
+            importMap.imports[importPath],
+        )
+
+        // make url always /web_modules/...
+        resolvedFile = '/' + path.posix.relative(root, resolvedFile)
+
+        // console.log(importPath, '-->', resolvedFile)
+        resolutionsMap.set(importPath, resolvedFile)
+    })
+    return resolutionsMap
+}
+
+function makeEntrypoints({
+    traversalResult,
+    requestToFile,
+    isLinkedImportPath,
+}) {
+    const installEntrypoints = Object.assign(
+        {},
+        ...traversalResult
+            .filter(
+                (x) =>
+                    moduleRE.test(x.importPath) && // TODO paths here could have an added js extension // TODO only add the js extension if exporting to outer directory
+                    !isLinkedImportPath(x.importPath),
+            )
+            .map((x) => {
+                const cleanImportPath = cleanUrl(x.importPath) //.replace(moduleRE, '')
+
+                // console.log(url.parse(x.importer).pathname)
+                // TODO here i get paths with an added .js extension
+                let importerDir = path.dirname(
+                    requestToFile(
+                        // TODO request to file should handle the added .js extension
+                        url.parse(x.importer).path, // .replace(moduleRE, ''),
+                    ),
+                )
+                // importerDir = path.posix.join(
+                //     root,
+                //     importerDir.startsWith('/')
+                //         ? importerDir.slice(1)
+                //         : importerDir,
+                // )
+                const importPath = cleanImportPath.replace(moduleRE, '')
+                const file = defaultResolver(importerDir, importPath) // TODO what if this file is outside root, how deep will the web_modules folder? will it work?
+                return {
+                    [cleanImportPath]: file,
+                }
+            }),
+    )
+    return installEntrypoints
+}
+
+function formatPathToUrl({ entry, baseUrl }) {
+    entry = entry.startsWith('/') ? entry.slice(1) : path.posix.normalize(entry)
+    return new URL(entry, baseUrl).toString()
 }
 
 function getPackageNameFromImportPath(importPath: string) {

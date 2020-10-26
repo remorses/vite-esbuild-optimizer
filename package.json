@@ -5,5 +5,8 @@
         "example",
         "example-linked-package",
         "esbuild-polyfills"
-    ]
+    ],
+    "scripts": {
+        "watch": "tsc -b -w"
+    }
 }

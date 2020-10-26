@@ -6,11 +6,12 @@
         "myvite": "node /Users/morse/Documents/GitHub/vite/bin/vite.js"
     },
     "dependencies": {
+        "axios": "^0.20.0",
+        "example-linked-package": "*",
+        "lodash-es": "^4.17.15",
         "react": "16.13.1",
         "react-dom": "16.13.1",
-        "axios": "^0.20.0",
-        "lodash-es": "^4.17.15",
-        "example-linked-package": "*"
+        "vite": "^1.0.0-rc.6"
     },
     "devDependencies": {
         "@types/react": "^16.9.53",
