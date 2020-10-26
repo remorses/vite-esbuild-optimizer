@@ -6,6 +6,7 @@ import {
 } from 'es-module-traversal'
 import path from 'path'
 import fsx from 'fs-extra'
+import fs from 'fs-extra'
 import findUp from 'find-up'
 import { createHash } from 'crypto'
 import { promises as fsp } from 'fs'
@@ -17,6 +18,12 @@ import { printStats } from './stats'
 const moduleRE = /^\/@modules\//
 const HASH_FILE_NAME = '.optimizer-hash'
 const DO_NOT_OPTIMIZE = 'DO_NOT_OPTIMIZE'
+const CACHE_FILE = 'cached.json' // TODO do i want to cache entrypoints or resolution map?
+
+type Cache = {
+    webModulesResolutions: Record<string, string>
+    installEntrypoints: Record<string, string>
+}
 
 export function esbuildOptimizerPlugin({
     entryPoints,
@@ -24,7 +31,6 @@ export function esbuildOptimizerPlugin({
     force = false,
 }): ServerPlugin {
     // maps /@modules/module/index.js to /web_modules/module/index.js
-    let webModulesResolutions = new Map<string, string>() // TODO read the resolution map from disk cache
 
     const linkedPackages = new Set(link)
 
@@ -32,10 +38,10 @@ export function esbuildOptimizerPlugin({
         return linkedPackages.has(getPackageNameFromImportPath(importPath))
     }
 
-    let installEntrypoints = {}
-
     return ({ app, root, watcher, config, resolver, server }) => {
         const dest = path.join(root, 'web_modules')
+        let { webModulesResolutions, installEntrypoints } = readCache({ dest })
+
         const hashPath = path.join(dest, HASH_FILE_NAME)
 
         server.once('listening', async () => {
@@ -97,6 +103,14 @@ export function esbuildOptimizerPlugin({
                 root,
             })
 
+            await updateCache({
+                cache: {
+                    webModulesResolutions,
+                    installEntrypoints,
+                },
+                dest,
+            })
+
             console.info(printStats(stats))
             console.info('Optimized dependencies\n')
         })
@@ -105,9 +119,9 @@ export function esbuildOptimizerPlugin({
             await next()
             // console.log({webModulesResolutions})
 
-            if (webModulesResolutions.has(ctx.path)) {
+            if (webModulesResolutions[ctx.path]) {
                 ctx.type = 'js'
-                const resolved = webModulesResolutions.get(ctx.path)
+                const resolved = webModulesResolutions[ctx.path]
                 console.info(ctx.path, '-->', resolved)
                 ctx.redirect(resolved) // redirect will change referer and resolutions to relative imports will work correctly
                 // redirect will also work in export because all relative imports will be converted to absolute paths by the server, ot does not matter the location of the optimized module, all imports will be rewritten to be absolute
@@ -147,17 +161,27 @@ export function esbuildOptimizerPlugin({
                         requestToFile: resolver.requestToFile,
                         traversalResult: res,
                     })
-                    const { importMap, stats } = await bundleWithEsBuild({ // make esbuild build incrementally
+                    installEntrypoints = {
+                        ...installEntrypoints,
+                        ...newEntrypoints,
+                    }
+                    const { importMap, stats } = await bundleWithEsBuild({
+                        // make esbuild build incrementally
                         dest,
-                        installEntrypoints: {
-                            ...installEntrypoints,
-                            ...newEntrypoints,
-                        },
+                        installEntrypoints,
                     })
                     webModulesResolutions = importMapToResolutionsMap({
                         dest,
                         importMap,
                         root,
+                    })
+
+                    await updateCache({
+                        cache: {
+                            installEntrypoints,
+                            webModulesResolutions,
+                        },
+                        dest,
                     })
 
                     console.info(printStats(stats))
@@ -169,7 +193,7 @@ export function esbuildOptimizerPlugin({
 }
 
 function importMapToResolutionsMap({ importMap, dest, root }) {
-    const resolutionsMap = new Map<string, string>()
+    const resolutionsMap = {}
     Object.keys(importMap.imports).forEach((importPath) => {
         let resolvedFile = path.posix.resolve(
             dest,
@@ -180,7 +204,7 @@ function importMapToResolutionsMap({ importMap, dest, root }) {
         resolvedFile = '/' + path.posix.relative(root, resolvedFile)
 
         // console.log(importPath, '-->', resolvedFile)
-        resolutionsMap.set(importPath, resolvedFile)
+        resolutionsMap[importPath] = resolvedFile
     })
     return resolutionsMap
 }
@@ -271,3 +295,20 @@ const cleanUrl = (url: string) => {
 }
 
 const sleep = (t) => new Promise((res) => setTimeout(res, t))
+
+function readCache({ dest }): Cache {
+    try {
+        return JSON.parse(
+            fs.readFileSync(path.join(dest, CACHE_FILE)).toString(),
+        )
+    } catch {
+        return { installEntrypoints: {}, webModulesResolutions: {} }
+    }
+}
+
+async function updateCache({ dest, cache }: { cache: Cache; dest: string }) {
+    await fsp.writeFile(
+        path.join(dest, CACHE_FILE),
+        JSON.stringify(cache, null, 4),
+    )
+}
