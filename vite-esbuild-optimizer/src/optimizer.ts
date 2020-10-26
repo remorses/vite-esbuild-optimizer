@@ -16,6 +16,7 @@ import { printStats } from './stats'
 
 const moduleRE = /^\/@modules\//
 const HASH_FILE_NAME = '.optimizer-hash'
+const DO_NOT_OPTIMIZE = 'DO_NOT_OPTIMIZE'
 
 export function esbuildOptimizerPlugin({
     entryPoints,
@@ -113,8 +114,8 @@ export function esbuildOptimizerPlugin({
                 // TODO redirect will not work with export if the extension of the compiled module is different than the old one?
             } else {
                 console.log(ctx.path)
-                // TODO check if the resolved path points to a node_modules file (not relative and not a linked package), if yes restart optimization of dependencies with the missing import paths
                 if (
+                    ctx.query.DO_NOT_OPTIMIZE != null &&
                     moduleRE.test(ctx.path) &&
                     resolver
                         .requestToFile(resolver.requestToFile(ctx.path))
@@ -126,10 +127,13 @@ export function esbuildOptimizerPlugin({
                     // get the imports and rerun optimization
                     const port = ctx.server.address()['port']
                     const baseUrl = `http://localhost:${port}`
+                    const entry = addQuery({
+                        url: new URL(ctx.path, baseUrl), // TODO make this better, reuse already existing query
+                        query: DO_NOT_OPTIMIZE,
+                    })
+                    console.log({ entry })
                     const res = await traverseEsModules({
-                        entryPoints: [
-                            formatPathToUrl({ baseUrl, entry: ctx.path }),
-                        ],
+                        entryPoints: [entry],
                         stopTraversing: () => true,
                         readFile: readFromUrlOrPath, // TODO send a special query that stops the server from trying to optimize again to not recurse indefinitely
                         resolver: urlResolver({
@@ -137,8 +141,7 @@ export function esbuildOptimizerPlugin({
                             root,
                         }),
                     })
-                    console.log({res})
-                    // TODO abstract THIS?
+                    console.log({ res })
                     const newEntrypoints = makeEntrypoints({
                         isLinkedImportPath,
                         requestToFile: resolver.requestToFile,
@@ -180,6 +183,11 @@ function importMapToResolutionsMap({ importMap, dest, root }) {
         resolutionsMap.set(importPath, resolvedFile)
     })
     return resolutionsMap
+}
+
+function addQuery({ url = new URL(''), query }) {
+    url.search = '?' + query
+    return url.toString()
 }
 
 function makeEntrypoints({
