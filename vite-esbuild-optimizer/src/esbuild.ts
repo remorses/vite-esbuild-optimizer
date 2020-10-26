@@ -26,7 +26,7 @@ export async function bundleWithEsBuild({
     const tsconfigTempFile = tmpfile('.json')
     await fs.promises.writeFile(tsconfigTempFile, makeTsConfig({ alias }))
 
-    rimraf.sync(destLoc)
+    // rimraf.sync(destLoc) // do not delete or on flight imports will return 404
     await esbuild({
         splitting: true, // needed to dedupe packages
         external: externalPackages,

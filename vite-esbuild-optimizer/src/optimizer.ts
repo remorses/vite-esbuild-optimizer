@@ -121,14 +121,16 @@ export function esbuildOptimizerPlugin({
 
             function redirect() {
                 ctx.type = 'js'
-                ctx.redirect(cleanUrl(webModulesResolutions[ctx.path]))
+                ctx.redirect(cleanUrl(webModulesResolutions[ctx.path])) // TODO do not clean completely, instead remove only DO_NOT_OPTIMIZE
             }
             // console.log({webModulesResolutions})
 
-            if (webModulesResolutions[ctx.path]) {
+            if (webModulesResolutions[cleanUrl(ctx.path)]) {
                 redirect()
             } else {
                 console.log(ctx.path)
+
+                // try to rebundle dependencies if an import path is not found
                 if (
                     ctx.query[DO_NOT_OPTIMIZE] == null &&
                     moduleRE.test(ctx.path) &&
@@ -140,10 +142,10 @@ export function esbuildOptimizerPlugin({
                     console.info(`trying to optimize module for ${ctx.path}`)
 
                     const importer = ctx.get('referer')
-                        ? new URL(ctx.get('referer')).pathname
-                        : ''
-                    console.log({ importer })
+
+                    // console.log({ importer })
                     if (!importer) {
+                        console.log('no referer for ' + ctx.path)
                         return // source maps request sometimes have no referer
                     }
                     // TODO maybe parse the importer to get other possible importPaths?
