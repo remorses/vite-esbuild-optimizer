@@ -1,6 +1,7 @@
 import {
     defaultResolver,
     readFromUrlOrPath,
+    ResultType,
     traverseEsModules,
     urlResolver,
 } from 'es-module-traversal'
@@ -90,7 +91,7 @@ export function esbuildOptimizerPlugin({
             installEntrypoints = makeEntrypoints({
                 isLinkedImportPath,
                 requestToFile: resolver.requestToFile,
-                traversalResult,
+                imports: traversalResult,
             })
             const { importMap, stats } = await bundleWithEsBuild({
                 dest,
@@ -117,15 +118,15 @@ export function esbuildOptimizerPlugin({
 
         app.use(async (ctx, next) => {
             await next()
+
+            function redirect() {
+                ctx.type = 'js'
+                ctx.redirect(cleanUrl(webModulesResolutions[ctx.path]))
+            }
             // console.log({webModulesResolutions})
 
             if (webModulesResolutions[ctx.path]) {
-                ctx.type = 'js'
-                const resolved = webModulesResolutions[ctx.path]
-                console.info(ctx.path, '-->', resolved)
-                ctx.redirect(resolved) // redirect will change referer and resolutions to relative imports will work correctly
-                // redirect will also work in export because all relative imports will be converted to absolute paths by the server, ot does not matter the location of the optimized module, all imports will be rewritten to be absolute
-                // TODO redirect will not work with export if the extension of the compiled module is different than the old one?
+                redirect()
             } else {
                 console.log(ctx.path)
                 if (
@@ -138,28 +139,40 @@ export function esbuildOptimizerPlugin({
                     // console.log({ p: resolver.requestToFile(ctx.path) })
                     console.info(`trying to optimize module for ${ctx.path}`)
 
+                    const importer = ctx.get('referer')
+                        ? new URL(ctx.get('referer')).pathname
+                        : ''
+                    console.log({ importer })
+                    if (!importer) {
+                        return // source maps request sometimes have no referer
+                    }
+                    // TODO maybe parse the importer to get other possible importPaths?
                     // get the imports and rerun optimization
-                    const port = ctx.server.address()['port']
-                    const baseUrl = `http://localhost:${port}`
-                    const entry = addQuery({
-                        urlString: new URL(ctx.path, baseUrl).toString(), // TODO make this better, reuse already existing query
-                        query: DO_NOT_OPTIMIZE,
-                    })
-                    console.log({ entry })
-                    const res = await traverseEsModules({
-                        entryPoints: [entry],
-                        stopTraversing: () => true,
-                        readFile: readFromUrlOrPath,
-                        resolver: urlResolver({
-                            baseUrl,
-                            root,
-                        }),
-                    })
-                    // console.log({ res })
+                    // const port = ctx.server.address()['port']
+                    // const baseUrl = `http://localhost:${port}`
+                    // const entry = addQuery({ // TODO entry is the referer
+                    //     urlString: new URL(ctx.path, baseUrl).toString(), // TODO make this better, reuse already existing query
+                    //     query: DO_NOT_OPTIMIZE,
+                    // })
+                    // console.log({ entry })
+                    // const res = await traverseEsModules({
+                    //     entryPoints: [entry],
+                    //     stopTraversing: () => true,
+                    //     readFile: readFromUrlOrPath,
+                    //     resolver: urlResolver({
+                    //         baseUrl,
+                    //         root,
+                    //     }),
+                    // })
                     const newEntrypoints = makeEntrypoints({
                         isLinkedImportPath,
                         requestToFile: resolver.requestToFile,
-                        traversalResult: res,
+                        imports: [
+                            {
+                                importPath: ctx.path,
+                                importer,
+                            },
+                        ],
                     })
                     installEntrypoints = {
                         ...installEntrypoints,
@@ -184,8 +197,11 @@ export function esbuildOptimizerPlugin({
                         dest,
                     })
 
+                    console.log({ webModulesResolutions, path: ctx.path })
+
                     console.info(printStats(stats))
                     console.info('Optimized dependencies\n')
+                    redirect()
                 }
             }
         })
@@ -217,13 +233,17 @@ export function addQuery({ urlString, query }) {
 }
 
 function makeEntrypoints({
-    traversalResult,
+    imports,
     requestToFile,
     isLinkedImportPath,
+}: {
+    imports: Pick<ResultType, 'importPath' | 'importer'>[]
+    requestToFile: Function
+    isLinkedImportPath
 }) {
     const installEntrypoints = Object.assign(
         {},
-        ...traversalResult
+        ...imports
             .filter(
                 (x) =>
                     moduleRE.test(x.importPath) && // TODO paths here could have an added js extension // TODO only add the js extension if exporting to outer directory
