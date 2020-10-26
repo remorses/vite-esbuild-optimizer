@@ -1,12 +1,11 @@
 import { build as esbuild, Metadata } from 'esbuild'
-
-import { invert, merge } from 'lodash/fp'
 import fs from 'fs'
+import { invert } from 'lodash/fp'
 import path from 'path'
 import toUnixPath from 'slash'
-import rimraf from 'rimraf'
 import tmpfile from 'tmpfile'
 import { DependencyStatsOutput } from './stats'
+
 
 export async function bundleWithEsBuild({
     installEntrypoints = {} as Record<string, string>,
@@ -28,7 +27,7 @@ export async function bundleWithEsBuild({
 
     // rimraf.sync(destLoc) // do not delete or on flight imports will return 404
     await esbuild({
-        splitting: true, // needed to dedupe packages
+        splitting: true, // needed to dedupe modules
         external: externalPackages,
         minifyIdentifiers: Boolean(minify),
         minifySyntax: Boolean(minify),
@@ -42,7 +41,8 @@ export async function bundleWithEsBuild({
             global: 'window',
             ...generateEnvReplacements(env),
         },
-        // TODO inject polyfills for process, ...etc
+        // TODO inject polyfills for runtime globals like process, ...etc
+        // TODO allow importing from node builtins when using allowNodeImports
         // TODO add plugin for pnp resolution
         tsconfig: tsconfigTempFile,
         bundle: true,
