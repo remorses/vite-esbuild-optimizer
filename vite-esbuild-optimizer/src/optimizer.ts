@@ -119,11 +119,11 @@ export function esbuildOptimizerPlugin({
                     moduleRE.test(ctx.path) &&
                     resolver
                         .requestToFile(resolver.requestToFile(ctx.path))
-                        .includes('node_modules')
+                        .includes('node_modules') // TODO better check if path is inside node_modules
                 ) {
                     // console.log({ p: resolver.requestToFile(ctx.path) })
                     console.info(`trying to optimize module for ${ctx.path}`)
-                    // TODO better check if path is inside node_modules
+
                     // get the imports and rerun optimization
                     const port = ctx.server.address()['port']
                     const baseUrl = `http://localhost:${port}`
