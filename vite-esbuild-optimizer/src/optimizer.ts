@@ -38,7 +38,7 @@ export function esbuildOptimizerServerPlugin({
     // const linkedPackages = new Set(link)
 
     return ({ app, root, watcher, config, resolver, server }) => {
-        const dest = path.join(root, 'web_modules')
+        const dest = path.join(root, 'web_modules/node_modules')
         let { webModulesResolutions, installEntrypoints } = readCache({ dest })
 
         const hashPath = path.join(dest, HASH_FILE_NAME)
@@ -78,7 +78,7 @@ export function esbuildOptimizerServerPlugin({
                 entryPoints: entryPoints.map((entry) =>
                     formatPathToUrl({ baseUrl, entry }),
                 ),
-                stopTraversing: (importPath) => {
+                stopTraversing: (importPath) => { // TODO add importer dir to stopTraversing
                     return (
                         moduleRE.test(importPath) &&
                         isNodeModule(resolver.requestToFile(importPath)) // TODO requestToFile should always accept second argument or linked packages resolution will fail
@@ -87,19 +87,25 @@ export function esbuildOptimizerServerPlugin({
                 resolver: localUrlResolver,
                 readFile: readFromUrlOrPath,
             })
+            // TODO remove urls from the traversal result and use paths instead using requestToFile and using the importer path
+            // this way i could replace the traversal algo to use esbuild instead
 
             // console.log({traversalResult})
 
+            // create a map from server incoming path -> real path on disk
             installEntrypoints = makeEntrypoints({
                 requestToFile: resolver.requestToFile,
                 imports: traversalResult,
             })
             rimraf.sync(dest)
+
+            // bundle and create a map from server incoming path -> bundle path on disk
             const { importMap, stats } = await bundleWithEsBuild({
                 dest,
                 installEntrypoints,
             })
 
+            // create a map with incoming server path -> bundle server path
             webModulesResolutions = importMapToResolutionsMap({
                 dest,
                 importMap,
@@ -221,10 +227,10 @@ export function esbuildOptimizerServerPlugin({
 
 function importMapToResolutionsMap({ importMap, dest, root }) {
     const resolutionsMap = {}
-    Object.keys(importMap.imports).forEach((importPath) => {
+    Object.keys(importMap).forEach((importPath) => {
         let resolvedFile = path.posix.resolve(
             dest,
-            importMap.imports[importPath],
+            importMap[importPath],
         )
 
         // make url always /web_modules/...

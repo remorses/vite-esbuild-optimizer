@@ -6,7 +6,6 @@ import toUnixPath from 'slash'
 import tmpfile from 'tmpfile'
 import { DependencyStatsOutput } from './stats'
 
-
 export async function bundleWithEsBuild({
     installEntrypoints = {} as Record<string, string>,
     dest: destLoc,
@@ -85,15 +84,11 @@ function makeTsConfig({ alias }) {
     return JSON.stringify(tsconfig)
 }
 
-type ImportMap = {
-    imports: Record<string, string>
-}
-
 function metafileToImportMap(_options: {
     installEntrypoints: Record<string, string>
     meta: Metadata
     destLoc: string
-}): ImportMap {
+}): Record<string, string> {
     const {
         destLoc: destLoc,
         installEntrypoints: installEntrypoints,
@@ -126,7 +121,7 @@ function metafileToImportMap(_options: {
         },
     )
     const importMap = Object.assign({}, ...importMaps)
-    return { imports: importMap }
+    return importMap
 }
 
 function metafileToStats(_options: {
