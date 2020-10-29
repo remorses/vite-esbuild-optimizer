@@ -3,7 +3,7 @@ import { EventEmitter, once } from 'events'
 import {
     defaultResolver,
     readFromUrlOrPath,
-    ResultType,
+    TraversalResultType,
     traverseEsModules,
     urlResolver,
 } from 'es-module-traversal'
@@ -27,6 +27,13 @@ const CACHE_FILE = 'cached.json'
 type Cache = {
     webModulesResolutions: Record<string, string>
     installEntrypoints: Record<string, string>
+}
+
+function pathFromUrl(url: string) {
+    if (url.startsWith('http')) {
+        return new URL(url).pathname
+    }
+    return url
 }
 
 export function esbuildOptimizerServerPlugin({
@@ -82,15 +89,25 @@ export function esbuildOptimizerServerPlugin({
                 entryPoints: entryPoints.map((entry) =>
                     formatPathToUrl({ baseUrl, entry }),
                 ),
-                stopTraversing: (importPath) => {
+                stopTraversing: (importPath, context) => {
                     // TODO add importer dir to stopTraversing
+                    console.log({ importPath, context })
+
                     return (
                         moduleRE.test(importPath) &&
-                        isNodeModule(resolver.requestToFile(importPath)) // TODO requestToFile should always accept second argument or linked packages resolution will fail
+                        isNodeModule(
+                            // @ts-ignore
+                            defaultResolver(
+                                pathFromUrl(context).replace(moduleRE, ''),
+                                pathFromUrl(importPath).replace(moduleRE, ''),
+                            ),
+                        ) // TODO requestToFile should always accept second argument or linked packages resolution will fail
                     )
                 },
                 resolver: localUrlResolver,
-                readFile: readFromUrlOrPath,
+                readFile: (x, y) => {
+                    return readFromUrlOrPath(x, y)
+                },
             })
             // TODO remove urls from the traversal result and use paths instead using requestToFile and using the importer path
             // this way i could replace the traversal algo to use esbuild instead
@@ -101,12 +118,13 @@ export function esbuildOptimizerServerPlugin({
             resolvedFiles = traversalResult
                 .map((x) => {
                     const importerDir = resolver.requestToFile(
-                        new URL(x.importer).pathname, // should not be node_module, i can omit importer
+                        x.importer, // should not be node_module, i can omit importer
                     )
-                    const resolved = resolver.requestToFile(
-                        x.importPath, // TODO in esbuild these path will be already resolved
+
+                    const resolved = defaultResolver(
                         // @ts-ignore
                         importerDir,
+                        pathFromUrl(x.resolvedImportPath).replace(moduleRE, ''), // TODO in esbuild these path will be already resolved
                     )
                     return resolved
                 })
@@ -278,7 +296,7 @@ function makeEntrypoints({
     imports,
     requestToFile,
 }: {
-    imports: ResultType[]
+    imports: TraversalResultType[]
     requestToFile: Function
 }) {
     const installEntrypoints = Object.assign(
