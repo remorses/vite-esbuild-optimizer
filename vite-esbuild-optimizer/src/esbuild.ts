@@ -7,7 +7,7 @@ import tmpfile from 'tmpfile'
 import { DependencyStatsOutput } from './stats'
 
 export async function bundleWithEsBuild({
-    installEntrypoints = {} as Record<string, string>,
+    entryPoints,
     dest: destLoc,
     ...options
 }) {
@@ -19,7 +19,7 @@ export async function bundleWithEsBuild({
     } = options
 
     const metafile = path.join(destLoc, './meta.json')
-    const entryPoints = [...Object.values(installEntrypoints)]
+    // const entryPoints = [...Object.values(installEntrypoints)]
 
     const tsconfigTempFile = tmpfile('.json')
     await fs.promises.writeFile(tsconfigTempFile, makeTsConfig({ alias }))
@@ -61,7 +61,7 @@ export async function bundleWithEsBuild({
     )
 
     const importMap = metafileToImportMap({
-        installEntrypoints,
+        entryPoints,
         meta,
         destLoc: destLoc,
     })
@@ -85,19 +85,12 @@ function makeTsConfig({ alias }) {
 }
 
 function metafileToImportMap(_options: {
-    installEntrypoints: Record<string, string>
+    entryPoints: string[]
     meta: Metadata
     destLoc: string
 }): Record<string, string> {
-    const {
-        destLoc: destLoc,
-        installEntrypoints: installEntrypoints,
-        meta,
-    } = _options
-    const inputFiles = Object.values(installEntrypoints).map((x) =>
-        path.resolve(x),
-    ) // TODO replace resolve with join in cwd
-    const inputFilesToSpecifiers = invert(installEntrypoints)
+    const { destLoc: destLoc, entryPoints, meta } = _options
+    const inputFiles = entryPoints.map((x) => path.resolve(x)) // TODO replace resolve with join in cwd
 
     const importMaps: Record<string, string>[] = Object.keys(meta.outputs).map(
         (output) => {
@@ -112,9 +105,9 @@ function metafileToImportMap(_options: {
             if (!input) {
                 return {}
             }
-            const specifier = inputFilesToSpecifiers[input]
+            // const specifier = inputFilesToSpecifiers[input]
             return {
-                [specifier]:
+                [input]:
                     './' +
                     toUnixPath(path.normalize(path.relative(destLoc, output))),
             }
