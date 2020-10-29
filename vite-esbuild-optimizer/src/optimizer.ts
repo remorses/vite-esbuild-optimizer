@@ -137,7 +137,7 @@ export function esbuildOptimizerServerPlugin({
 
             function redirect() {
                 ctx.type = 'js'
-                ctx.redirect(cleanUrl(webModulesResolutions[ctx.path]))
+                ctx.redirect(cleanUrl(webModulesResolutions[ctx.path])) // TODO instead of mapping from pathname map from real node_module path on disk
             }
             // console.log({webModulesResolutions})
 
