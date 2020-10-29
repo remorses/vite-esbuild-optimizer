@@ -39,7 +39,10 @@ export function esbuildOptimizerServerPlugin({
 
     return ({ app, root, watcher, config, resolver, server }) => {
         const dest = path.join(root, 'web_modules/node_modules')
-        let { webModulesResolutions, installEntrypoints } = readCache({ dest })
+        let { webModulesResolutions, installEntrypoints } = readCache({
+            dest,
+            force,
+        })
 
         const hashPath = path.join(dest, HASH_FILE_NAME)
 
@@ -78,7 +81,8 @@ export function esbuildOptimizerServerPlugin({
                 entryPoints: entryPoints.map((entry) =>
                     formatPathToUrl({ baseUrl, entry }),
                 ),
-                stopTraversing: (importPath) => { // TODO add importer dir to stopTraversing
+                stopTraversing: (importPath) => {
+                    // TODO add importer dir to stopTraversing
                     return (
                         moduleRE.test(importPath) &&
                         isNodeModule(resolver.requestToFile(importPath)) // TODO requestToFile should always accept second argument or linked packages resolution will fail
@@ -228,10 +232,7 @@ export function esbuildOptimizerServerPlugin({
 function importMapToResolutionsMap({ importMap, dest, root }) {
     const resolutionsMap = {}
     Object.keys(importMap).forEach((importPath) => {
-        let resolvedFile = path.posix.resolve(
-            dest,
-            importMap[importPath],
-        )
+        let resolvedFile = path.posix.resolve(dest, importMap[importPath])
 
         // make url always /web_modules/...
         resolvedFile = '/' + path.posix.relative(root, resolvedFile)
@@ -340,7 +341,10 @@ const cleanUrl = (url: string) => {
 
 const sleep = (t) => new Promise((res) => setTimeout(res, t))
 
-function readCache({ dest }): Cache {
+function readCache({ dest, force }): Cache {
+    if (force) {
+        return { installEntrypoints: {}, webModulesResolutions: {} }
+    }
     try {
         return JSON.parse(
             fs.readFileSync(path.join(dest, CACHE_FILE)).toString(),
