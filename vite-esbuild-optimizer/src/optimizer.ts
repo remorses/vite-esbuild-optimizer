@@ -106,7 +106,8 @@ export function esbuildOptimizerServerPlugin({
                         moduleRE.test(importPath) &&
                         isNodeModule(
                             // @ts-ignore
-                            defaultResolver( // TODO here resolve fails for non node_modules is it ok?
+                            defaultResolver(
+                                // TODO here resolve fails for non node_modules is it ok?
                                 resolver.requestToFile(pathFromUrl(context)),
                                 relativePathFromUrl(importPath).replace(
                                     moduleRE,
@@ -192,7 +193,11 @@ export function esbuildOptimizerServerPlugin({
                         pathFromUrl(ctx.get('referer')), // should not be node_module, i can omit importer
                     )
 
-                const resolved = resolver.requestToFile(ctx.path) // TODO how can i resolve deeper paths
+                const resolved = defaultResolver( // TODO here requestToFIle also works even if it should not
+                    path.dirname(importerDir),
+                    ctx.path.slice(1).replace(moduleRE, ''),
+                ) // TODO how can i resolve stuff in linked packages
+                console.log({ resolved })
                 if (webModulesResolutions[resolved]) {
                     redirect(webModulesResolutions[resolved])
                 }
