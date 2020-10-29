@@ -18,7 +18,7 @@ import type { ServerPlugin, UserConfig } from 'vite'
 import { bundleWithEsBuild } from './esbuild'
 import { printStats } from './stats'
 
-const moduleRE = /^\/@modules\//
+const moduleRE = /^\/?@modules\//
 const HASH_FILE_NAME = '.optimizer-hash'
 const DO_NOT_OPTIMIZE = 'DO_NOT_OPTIMIZE'
 const READY_EVENT = 'READY_EVENT'
@@ -29,9 +29,18 @@ type Cache = {
     installEntrypoints: Record<string, string>
 }
 
+function relativePathFromUrl(url: string) {
+    if (url.startsWith('http')) {
+        const p = new URL(url).pathname
+        return p.startsWith('/') ? p.slice(1) : p
+    }
+    return url
+}
+
 function pathFromUrl(url: string) {
     if (url.startsWith('http')) {
-        return new URL(url).pathname
+        const p = new URL(url).pathname
+        return p
     }
     return url
 }
@@ -91,15 +100,18 @@ export function esbuildOptimizerServerPlugin({
                 ),
                 stopTraversing: (importPath, context) => {
                     // TODO add importer dir to stopTraversing
-                    console.log({ importPath, context })
+                    // console.log({ importPath, context })
 
                     return (
                         moduleRE.test(importPath) &&
                         isNodeModule(
                             // @ts-ignore
-                            defaultResolver(
-                                pathFromUrl(context).replace(moduleRE, ''),
-                                pathFromUrl(importPath).replace(moduleRE, ''),
+                            defaultResolver( // TODO here resolve fails for non node_modules is it ok?
+                                resolver.requestToFile(pathFromUrl(context)),
+                                relativePathFromUrl(importPath).replace(
+                                    moduleRE,
+                                    '',
+                                ),
                             ),
                         ) // TODO requestToFile should always accept second argument or linked packages resolution will fail
                     )
@@ -118,13 +130,17 @@ export function esbuildOptimizerServerPlugin({
             resolvedFiles = traversalResult
                 .map((x) => {
                     const importerDir = resolver.requestToFile(
-                        x.importer, // should not be node_module, i can omit importer
+                        pathFromUrl(x.importer), // should not be node_module, i can omit importer
                     )
+                    // console.log({ importerDir: x.importer })
 
                     const resolved = defaultResolver(
                         // @ts-ignore
                         importerDir,
-                        pathFromUrl(x.resolvedImportPath).replace(moduleRE, ''), // TODO in esbuild these path will be already resolved
+                        relativePathFromUrl(x.resolvedImportPath).replace(
+                            moduleRE,
+                            '',
+                        ), // TODO in esbuild these path will be already resolved
                     )
                     return resolved
                 })
@@ -173,14 +189,10 @@ export function esbuildOptimizerServerPlugin({
                 const importerDir =
                     ctx.get('referer') &&
                     resolver.requestToFile(
-                        new URL(ctx.get('referer')).pathname, // should not be node_module, i can omit importer
+                        pathFromUrl(ctx.get('referer')), // should not be node_module, i can omit importer
                     )
 
-                const resolved = resolver.requestToFile(
-                    ctx.path,
-                    // @ts-ignore
-                    importerDir,
-                )
+                const resolved = resolver.requestToFile(ctx.path) // TODO how can i resolve deeper paths
                 if (webModulesResolutions[resolved]) {
                     redirect(webModulesResolutions[resolved])
                 }
