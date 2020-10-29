@@ -4,11 +4,10 @@ import { merge } from 'lodash-es'
 import React from 'react'
 import merger from 'lodash-es/has'
 merger
-// import { merge as m } from 'lodash'
 import Counter from './Counter/Counter'
-
-// import has from 'lodash/has'
-// has
+merge
+import has from 'lodash/has'
+has
 // import zip from 'lodash/zip'
 // zip
 

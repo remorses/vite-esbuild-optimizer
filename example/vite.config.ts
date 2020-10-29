@@ -9,7 +9,7 @@ module.exports = {
         // link: ['package-b', 'some-react-components'],
     },
     plugins: [
-        { vpr, resolvers: [] },
+        { ...vpr, resolvers: [] },
         esbuildOptimizerPlugin({
             entryPoints: ['/main.tsx'],
             // link: ['example-linked-package'],
