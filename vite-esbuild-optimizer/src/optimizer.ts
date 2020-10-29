@@ -3,7 +3,7 @@ import { EventEmitter, once } from 'events'
 import {
     defaultResolver,
     readFromUrlOrPath,
-    ResultType,
+    TraversalResultType,
     traverseEsModules,
     urlResolver,
 } from 'es-module-traversal'
@@ -254,7 +254,7 @@ function makeEntrypoints({
     imports,
     requestToFile,
 }: {
-    imports: ResultType[]
+    imports: TraversalResultType[]
     requestToFile: Function
 }) {
     const installEntrypoints = Object.assign(
