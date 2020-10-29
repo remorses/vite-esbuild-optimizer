@@ -35,6 +35,7 @@ export function esbuildOptimizerServerPlugin({
 }): ServerPlugin {
     // maps /@modules/module/index.js to /web_modules/module/index.js
 
+    
     // const linkedPackages = new Set(link)
 
     return ({ app, root, watcher, config, resolver, server }) => {
@@ -88,7 +89,7 @@ export function esbuildOptimizerServerPlugin({
                 readFile: readFromUrlOrPath,
             })
 
-            // console.log({traversalResult})
+            console.log({traversalResult})
 
             installEntrypoints = makeEntrypoints({
                 requestToFile: resolver.requestToFile,
@@ -135,7 +136,7 @@ export function esbuildOptimizerServerPlugin({
             }
             // console.log({webModulesResolutions})
 
-            if (webModulesResolutions[cleanUrl(ctx.path)]) {
+            if (webModulesResolutions[resolver.requestToFile(ctx.path)]) {
                 redirect()
             } else {
                 console.log(ctx.path)
@@ -221,17 +222,17 @@ export function esbuildOptimizerServerPlugin({
 
 function importMapToResolutionsMap({ importMap, dest, root }) {
     const resolutionsMap = {}
-    Object.keys(importMap.imports).forEach((importPath) => {
+    Object.keys(importMap.imports).forEach((pathanme) => {
         let resolvedFile = path.posix.resolve(
             dest,
-            importMap.imports[importPath],
+            importMap.imports[pathanme],
         )
 
         // make url always /web_modules/...
         resolvedFile = '/' + path.posix.relative(root, resolvedFile)
 
         // console.log(importPath, '-->', resolvedFile)
-        resolutionsMap[importPath] = resolvedFile
+        resolutionsMap[pathanme] = resolvedFile
     })
     return resolutionsMap
 }
@@ -253,14 +254,15 @@ function makeEntrypoints({
     const installEntrypoints = Object.assign(
         {},
         ...imports
-            .filter(
-                (x) =>
-                    moduleRE.test(x.importPath) && // TODO paths here could have an added js extension
-                    // TODO only add the js extension if exporting to outer directory
-                    isNodeModule(requestToFile(x.importPath)),
-            )
+            // .filter((x) =>
+            //     // moduleRE.test(x.importPath) && // TODO paths here could have an added js extension
+            //     // TODO only add the js extension if exporting to outer directory
+            //     ,
+            // )
             .map((x) => {
-                const cleanImportPath = cleanUrl(x.importPath) //.replace(moduleRE, '')
+                const pathname = new URL(x.resolvedImportPath).pathname
+
+                // const cleanImportPath = cleanUrl(x.importPath) //.replace(moduleRE, '')
 
                 // console.log(url.parse(x.importer).pathname)
                 // TODO here i get paths with an added .js extension
@@ -270,18 +272,29 @@ function makeEntrypoints({
                         url.parse(x.importer).path, // .replace(moduleRE, ''),
                     ),
                 )
+
+                const resolved = requestToFile(pathname, importerDir)
+                if (!isNodeModule(resolved)) {
+                    return
+                }
+
+                console.log({
+                    pathname,
+                    resolved,
+                })
                 // importerDir = path.posix.join(
                 //     root,
                 //     importerDir.startsWith('/')
                 //         ? importerDir.slice(1)
                 //         : importerDir,
                 // )
-                const importPath = cleanImportPath.replace(moduleRE, '')
-                const file = defaultResolver(importerDir, importPath) // TODO what if this file is outside root, how deep will the web_modules folder? will it work?
+                // const importPath = cleanImportPath.replace(moduleRE, '')
+                // const file = defaultResolver(importerDir, importPath) // TODO what if this file is outside root, how deep will the web_modules folder? will it work?
                 return {
-                    [cleanImportPath]: file,
+                    [pathname]: resolved,
                 }
-            }),
+            })
+            .filter(Boolean),
     )
     return installEntrypoints
 }

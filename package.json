@@ -1,12 +1,16 @@
 {
     "private": true,
-    
-    "workspaces": [
-        "vite-esbuild-optimizer",
-        "example",
-        "example-linked-package",
-        "esbuild-polyfills"
-    ],
+    "workspaces": {
+        "nohoist": [
+            "example-linked-package/smoldash"
+        ],
+        "packages": [
+            "vite-esbuild-optimizer",
+            "example",
+            "example-linked-package",
+            "esbuild-polyfills"
+        ]
+    },
     "scripts": {
         "watch": "tsc -b -w",
         "test": "jest"
