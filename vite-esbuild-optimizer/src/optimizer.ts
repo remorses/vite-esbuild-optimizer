@@ -81,7 +81,7 @@ export function esbuildOptimizerServerPlugin({
                 stopTraversing: (importPath) => {
                     return (
                         moduleRE.test(importPath) &&
-                        isNodeModule(resolver.requestToFile(importPath)) // TODO memoize requesttofile calls, give a way to stop traversing even in linked dependencies, to make traversal performance better?
+                        isNodeModule(resolver.requestToFile(importPath)) // TODO requestToFile should always accept second argument or linked packages resolution will fail
                     )
                 },
                 resolver: localUrlResolver,

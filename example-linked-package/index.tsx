@@ -1,7 +1,7 @@
 import React from 'react'
-import merge from 'lodash/merge'
-// import isreg from 'lodash/isRegExp'
-// isreg
+import merge from 'lodash-es/merge'
+import {at} from 'smoldash'
+at
 export const SomeComponent = ({}) => {
     return (
         <pre>

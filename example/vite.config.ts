@@ -1,4 +1,5 @@
 import type { ServerPlugin, UserConfig } from 'vite'
+import * as vpr from 'vite-plugin-react'
 import { esbuildOptimizerPlugin } from 'vite-esbuild-optimizer'
 
 module.exports = {
@@ -8,6 +9,7 @@ module.exports = {
         // link: ['package-b', 'some-react-components'],
     },
     plugins: [
+        // vpr, // TODO vpr gets loaded anyway
         esbuildOptimizerPlugin({
             entryPoints: ['/main.tsx'],
             // link: ['example-linked-package'],

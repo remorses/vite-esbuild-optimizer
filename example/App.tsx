@@ -7,10 +7,10 @@ merger
 // import { merge as m } from 'lodash'
 import Counter from './Counter/Counter'
 
-import has from 'lodash/has'
-has
-import zip from 'lodash/zip'
-zip
+// import has from 'lodash/has'
+// has
+// import zip from 'lodash/zip'
+// zip
 
 
 merge({}, {})
