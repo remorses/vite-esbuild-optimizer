@@ -140,7 +140,7 @@ export function esbuildOptimizerServerPlugin({
 
             function redirect(absPath) {
                 ctx.type = 'js'
-                absPath = '/' + absPath.relative(root, absPath) // format to server path for redirection
+                absPath = '/' + path.relative(root, absPath) // format to server path for redirection
                 console.log(ctx.path, '->', absPath)
                 ctx.redirect(absPath) // TODO instead of mapping from pathname map from real node_module path on disk
             }
@@ -253,11 +253,13 @@ export function esbuildOptimizerServerPlugin({
     }
 }
 
-async function getDependenciesPathsEsbuild({ entryPoints, root }) {
+async function getDependenciesPathsEsbuild({
+    entryPoints,
+    root,
+    requestToFile,
+}) {
     const res = await traverseWithEsbuild({
-        entryPoints: entryPoints.map((x) =>
-            path.resolve(root, x.startsWith('/') ? x.slice(1) : x),
-        ),
+        entryPoints: entryPoints.map((x) => requestToFile(x)),
     })
     return res.map((x) => x.resolvedImportPath)
 }
@@ -381,7 +383,7 @@ function readCache({ dest, force }): Cache {
         )
         // assert all files are present
         Object.values(parsed.bundleMap).map((bundle) => fs.accessSync(bundle))
-        parsed.dependenciesPaths.map((bundle) => fs.accessSync(bundle))
+        parsed.dependenciesPaths.map((bundle) => fs.existsSync(bundle))
     } catch {
         fsx.removeSync(path.join(dest, CACHE_FILE))
         return defaultValue
