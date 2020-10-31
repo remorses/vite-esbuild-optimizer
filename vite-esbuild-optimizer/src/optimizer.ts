@@ -7,6 +7,7 @@ import {
     traverseEsModules,
     urlResolver,
 } from 'es-module-traversal'
+import { traverseWithEsbuild } from 'es-module-traversal/dist/traverseEsbuild'
 import path from 'path'
 import fsx from 'fs-extra'
 import fs from 'fs-extra'
@@ -56,10 +57,7 @@ export function esbuildOptimizerServerPlugin({
 
     return function plugin({ app, root, watcher, config, resolver, server }) {
         const dest = path.join(root, 'web_modules/node_modules')
-        let {
-            webModulesResolutions = {},
-            resolvedFiles: dependenciesPaths = [],
-        } = {}
+        let { webModulesResolutions = {}, dependenciesPaths = [] } = {}
         // readCache({
         //     dest,
         //     force,
@@ -94,8 +92,9 @@ export function esbuildOptimizerServerPlugin({
             // get node_modules resolved paths traversing entrypoints
             dependenciesPaths = await getDependenciesPaths({
                 entryPoints,
-                requestToFile: resolver.requestToFile,
                 root,
+
+                requestToFile: resolver.requestToFile,
                 baseUrl: `http://localhost:${port}`,
             })
 
@@ -246,6 +245,16 @@ export function esbuildOptimizerServerPlugin({
             // }
         })
     }
+}
+
+
+async function getDependenciesPathsEsbuild({ entryPoints, root }) {
+    const res = await traverseWithEsbuild({
+        entryPoints: entryPoints.map((x) =>
+            path.resolve(root, x.startsWith('/') ? x.slice(1) : x),
+        ),
+    })
+    return res.map((x) => x.resolvedImportPath)
 }
 
 // returns list of paths of all dependencies found traversing the entrypoints
