@@ -98,9 +98,8 @@ export function esbuildOptimizerServerPlugin({
                 baseUrl: `http://localhost:${port}`,
             })
 
-            rimraf.sync(dest)
-
             // bundle and create a map from node module path -> bundle path on disk
+            rimraf.sync(dest)
             const { bundleMap, stats } = await bundleWithEsBuild({
                 dest,
                 entryPoints: dependenciesPaths,
@@ -138,6 +137,7 @@ export function esbuildOptimizerServerPlugin({
 
             function redirect(path) {
                 ctx.type = 'js'
+                console.log(ctx.path, '->', path)
                 ctx.redirect(path) // TODO instead of mapping from pathname map from real node_module path on disk
             }
             // try to get resolved file
@@ -156,7 +156,7 @@ export function esbuildOptimizerServerPlugin({
                     path.dirname(importerDir),
                     ctx.path.slice(1).replace(moduleRE, ''),
                 ) // TODO how can i resolve stuff in linked packages
-                console.log({ resolved })
+                // console.log({ resolved })
                 if (resolved && webModulesResolutions[resolved]) {
                     redirect(webModulesResolutions[resolved])
                 }
@@ -246,7 +246,6 @@ export function esbuildOptimizerServerPlugin({
         })
     }
 }
-
 
 async function getDependenciesPathsEsbuild({ entryPoints, root }) {
     const res = await traverseWithEsbuild({
