@@ -28,7 +28,7 @@ const CACHE_FILE = 'cached.json'
 
 type Cache = {
     webModulesResolutions: Record<string, string>
-    installEntrypoints: Record<string, string>
+    dependenciesPaths: string[]
 }
 
 function relativePathFromUrl(url: string) {
@@ -57,11 +57,10 @@ export function esbuildOptimizerServerPlugin({
 
     return function plugin({ app, root, watcher, config, resolver, server }) {
         const dest = path.join(root, 'web_modules/node_modules')
-        let { webModulesResolutions = {}, dependenciesPaths = [] } = {}
-        // readCache({
-        //     dest,
-        //     force,
-        // })
+        let { webModulesResolutions = {}, dependenciesPaths = [] } = readCache({
+            dest,
+            force,
+        })
 
         const hashPath = path.join(dest, HASH_FILE_NAME)
 
@@ -117,6 +116,14 @@ export function esbuildOptimizerServerPlugin({
                     return [k, bundlePath]
                 }),
             )
+
+            await updateCache({
+                cache: {
+                    webModulesResolutions,
+                    dependenciesPaths,
+                },
+                dest,
+            })
 
             console.log({ webModulesResolutions })
 
@@ -365,15 +372,16 @@ const cleanUrl = (url: string) => {
 const sleep = (t) => new Promise((res) => setTimeout(res, t))
 
 function readCache({ dest, force }): Cache {
+    const defaultValue = { dependenciesPaths: [], webModulesResolutions: {} }
     if (force) {
-        return { installEntrypoints: {}, webModulesResolutions: {} }
+        return defaultValue
     }
     try {
         return JSON.parse(
             fs.readFileSync(path.join(dest, CACHE_FILE)).toString(),
         )
     } catch {
-        return { installEntrypoints: {}, webModulesResolutions: {} }
+        return defaultValue
     }
 }
 
