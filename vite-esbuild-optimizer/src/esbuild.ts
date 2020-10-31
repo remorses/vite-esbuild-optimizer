@@ -60,7 +60,7 @@ export async function bundleWithEsBuild({
         await (await fs.promises.readFile(metafile)).toString(),
     )
 
-    const importMap = metafileToImportMap({
+    const bundleMap = metafileToBundleMap({
         entryPoints,
         meta,
         destLoc: destLoc,
@@ -68,7 +68,7 @@ export async function bundleWithEsBuild({
 
     const stats = metafileToStats({ meta, destLoc })
 
-    return { stats, importMap }
+    return { stats, bundleMap }
 }
 
 function makeTsConfig({ alias }) {
@@ -84,7 +84,7 @@ function makeTsConfig({ alias }) {
     return JSON.stringify(tsconfig)
 }
 
-function metafileToImportMap(_options: {
+function metafileToBundleMap(_options: {
     entryPoints: string[]
     meta: Metadata
     destLoc: string
@@ -107,9 +107,7 @@ function metafileToImportMap(_options: {
             }
             // const specifier = inputFilesToSpecifiers[input]
             return {
-                [input]:
-                    './' +
-                    toUnixPath(path.normalize(path.relative(destLoc, output))),
+                [input]: toUnixPath(path.normalize(path.resolve(output))),
             }
         },
     )
