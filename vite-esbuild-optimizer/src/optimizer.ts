@@ -16,7 +16,7 @@ import { createHash } from 'crypto'
 import { promises as fsp } from 'fs'
 import url, { URL } from 'url'
 import type { ServerPlugin, UserConfig } from 'vite'
-import { bundleWithEsBuild } from './esbuild'
+import { BundleMap, bundleWithEsBuild } from './esbuild'
 import { printStats } from './stats'
 import fromEntries from 'fromentries'
 
@@ -27,7 +27,7 @@ const READY_EVENT = 'READY_EVENT'
 const CACHE_FILE = 'cached.json'
 
 type Cache = {
-    bundleMap: Record<string, string>
+    bundleMap: BundleMap
     dependenciesPaths: string[]
 }
 
@@ -138,10 +138,11 @@ export function esbuildOptimizerServerPlugin({
 
             await next()
 
-            function redirect(path) {
+            function redirect(absPath) {
                 ctx.type = 'js'
-                console.log(ctx.path, '->', path)
-                ctx.redirect(path) // TODO instead of mapping from pathname map from real node_module path on disk
+                absPath = '/' + absPath.relative(root, absPath) // format to server path for redirection
+                console.log(ctx.path, '->', absPath)
+                ctx.redirect(absPath) // TODO instead of mapping from pathname map from real node_module path on disk
             }
             // try to get resolved file
             if (
@@ -162,7 +163,7 @@ export function esbuildOptimizerServerPlugin({
                 // console.log({ resolved })
                 if (resolved && bundleMap[resolved]) {
                     let bundlePath = bundleMap[resolved]
-                    bundlePath = '/' + path.relative(root, bundlePath) // format to server path for redirection
+
                     redirect(bundlePath)
                 }
                 // console.log({ resolved, importerDir })

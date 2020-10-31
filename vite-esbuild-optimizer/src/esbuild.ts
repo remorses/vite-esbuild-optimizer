@@ -84,15 +84,17 @@ function makeTsConfig({ alias }) {
     return JSON.stringify(tsconfig)
 }
 
+export type BundleMap = Record<string, string>
+
 function metafileToBundleMap(_options: {
     entryPoints: string[]
     meta: Metadata
     destLoc: string
-}): Record<string, string> {
+}): BundleMap {
     const { destLoc: destLoc, entryPoints, meta } = _options
     const inputFiles = entryPoints.map((x) => path.resolve(x)) // TODO replace resolve with join in cwd
 
-    const importMaps: Record<string, string>[] = Object.keys(meta.outputs).map(
+    const maps: Record<string, string>[] = Object.keys(meta.outputs).map(
         (output) => {
             // chunks cannot be entrypoints
             if (path.basename(output).startsWith('chunk.')) {
@@ -111,7 +113,7 @@ function metafileToBundleMap(_options: {
             }
         },
     )
-    const importMap = Object.assign({}, ...importMaps)
+    const importMap = Object.assign({}, ...maps)
     return importMap
 }
 
