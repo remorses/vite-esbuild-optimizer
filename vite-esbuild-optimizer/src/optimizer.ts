@@ -378,9 +378,13 @@ function readCache({ dest, force }): Cache {
         return defaultValue
     }
     try {
-        return JSON.parse(
+        const parsed: Cache = JSON.parse(
             fs.readFileSync(path.join(dest, CACHE_FILE)).toString(),
         )
+        // assert all files are present
+        for (let bundle of Object.values(parsed.webModulesResolutions)) {
+            fs.accessSync(bundle)
+        }
     } catch {
         return defaultValue
     }
