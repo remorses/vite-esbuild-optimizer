@@ -108,7 +108,7 @@ export function esbuildOptimizerServerPlugin({
                 entryPoints: dependenciesPaths,
             })
 
-            console.log({ nonChachedBundleMap })
+            // console.log({ nonChachedBundleMap })
 
             // create a map with incoming server path -> bundle server path
             bundleMap = nonChachedBundleMap
@@ -121,7 +121,7 @@ export function esbuildOptimizerServerPlugin({
                 dest,
             })
 
-            console.log({ bundleMap })
+            // console.log({ bundleMap })
 
             console.info(printStats(stats))
             console.info('Optimized dependencies\n')
