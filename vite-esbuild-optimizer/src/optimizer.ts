@@ -56,6 +56,7 @@ export function esbuildOptimizerServerPlugin({
     // const linkedPackages = new Set(link)
 
     return function plugin({ app, root, watcher, config, resolver, server }) {
+        force = force || config['force']
         const dest = path.join(root, 'web_modules/node_modules')
         let { webModulesResolutions = {}, dependenciesPaths = [] } = readCache({
             dest,
