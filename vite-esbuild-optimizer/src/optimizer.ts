@@ -27,7 +27,7 @@ const READY_EVENT = 'READY_EVENT'
 const CACHE_FILE = 'cached.json'
 
 type Cache = {
-    webModulesResolutions: Record<string, string>
+    bundleMap: Record<string, string>
     dependenciesPaths: string[]
 }
 
@@ -58,7 +58,7 @@ export function esbuildOptimizerServerPlugin({
     return function plugin({ app, root, watcher, config, resolver, server }) {
         force = force || config['force']
         const dest = path.join(root, 'web_modules/node_modules')
-        let { webModulesResolutions = {}, dependenciesPaths = [] } = readCache({
+        let { bundleMap = {}, dependenciesPaths = [] } = readCache({
             dest,
             force,
         })
@@ -100,33 +100,28 @@ export function esbuildOptimizerServerPlugin({
 
             // bundle and create a map from node module path -> bundle path on disk
             rimraf.sync(dest)
-            const { bundleMap, stats } = await bundleWithEsBuild({
+            const {
+                bundleMap: nonChachedBundleMap,
+                stats,
+            } = await bundleWithEsBuild({
                 dest,
                 entryPoints: dependenciesPaths,
             })
 
-            console.log({ bundleMap })
+            console.log({ nonChachedBundleMap })
 
             // create a map with incoming server path -> bundle server path
-            webModulesResolutions = fromEntries(
-                Object.entries(bundleMap).map(([k, bundlePath]) => {
-                    // console.log({ bundlePath })
-                    bundlePath =
-                        '/' + path.relative(path.resolve(root), bundlePath) // format to server path for redirection
-
-                    return [k, bundlePath]
-                }),
-            )
+            bundleMap = nonChachedBundleMap
 
             await updateCache({
                 cache: {
-                    webModulesResolutions,
+                    bundleMap,
                     dependenciesPaths,
                 },
                 dest,
             })
 
-            console.log({ webModulesResolutions })
+            console.log({ bundleMap })
 
             console.info(printStats(stats))
             console.info('Optimized dependencies\n')
@@ -165,13 +160,15 @@ export function esbuildOptimizerServerPlugin({
                     ctx.path.slice(1).replace(moduleRE, ''),
                 ) // TODO how can i resolve stuff in linked packages
                 // console.log({ resolved })
-                if (resolved && webModulesResolutions[resolved]) {
-                    redirect(webModulesResolutions[resolved])
+                if (resolved && bundleMap[resolved]) {
+                    let bundlePath = bundleMap[resolved]
+                    bundlePath = '/' + path.relative(root, bundlePath) // format to server path for redirection
+                    redirect(bundlePath)
                 }
                 // console.log({ resolved, importerDir })
             }
 
-            // console.log({webModulesResolutions})
+            // console.log({bundleMap})
 
             // else {
             //     console.log(ctx.path)
@@ -230,7 +227,7 @@ export function esbuildOptimizerServerPlugin({
             //             dest,
             //             installEntrypoints,
             //         })
-            //         webModulesResolutions = importMapToResolutionsMap({
+            //         bundleMap = importMapToResolutionsMap({
             //             dest,
             //             importMap,
             //             root,
@@ -239,12 +236,12 @@ export function esbuildOptimizerServerPlugin({
             //         await updateCache({
             //             cache: {
             //                 installEntrypoints,
-            //                 webModulesResolutions,
+            //                 bundleMap,
             //             },
             //             dest,
             //         })
 
-            //         // console.log({ webModulesResolutions, path: ctx.path })
+            //         // console.log({ bundleMap, path: ctx.path })
 
             //         console.info(printStats(stats))
             //         console.info('Optimized dependencies\n')
@@ -373,7 +370,7 @@ const cleanUrl = (url: string) => {
 const sleep = (t) => new Promise((res) => setTimeout(res, t))
 
 function readCache({ dest, force }): Cache {
-    const defaultValue = { dependenciesPaths: [], webModulesResolutions: {} }
+    const defaultValue = { dependenciesPaths: [], bundleMap: {} }
     if (force) {
         return defaultValue
     }
@@ -382,10 +379,10 @@ function readCache({ dest, force }): Cache {
             fs.readFileSync(path.join(dest, CACHE_FILE)).toString(),
         )
         // assert all files are present
-        for (let bundle of Object.values(parsed.webModulesResolutions)) {
-            fs.accessSync(bundle)
-        }
+        Object.values(parsed.bundleMap).map((bundle) => fs.accessSync(bundle))
+        parsed.dependenciesPaths.map((bundle) => fs.accessSync(bundle))
     } catch {
+        fsx.removeSync(path.join(dest, CACHE_FILE))
         return defaultValue
     }
 }
