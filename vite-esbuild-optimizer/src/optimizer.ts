@@ -324,6 +324,50 @@ export function addQuery({ urlString, query }) {
     return parsed.toString()
 }
 
+
+function makeEntrypoints({
+    imports,
+    requestToFile,
+}: {
+    imports: TraversalResultType[]
+    requestToFile: Function
+}) {
+    const installEntrypoints = Object.assign(
+        {},
+        ...imports
+            .filter(
+                (x) =>
+                    moduleRE.test(x.importPath) && // TODO paths here could have an added js extension
+                    // TODO only add the js extension if exporting to outer directory
+                    isNodeModule(requestToFile(x.importPath)),
+            )
+            .map((x) => {
+                const cleanImportPath = cleanUrl(x.importPath) //.replace(moduleRE, '')
+
+                // console.log(url.parse(x.importer).pathname)
+                // TODO here i get paths with an added .js extension
+                let importerDir = path.dirname(
+                    requestToFile(
+                        // TODO request to file should handle the added .js extension
+                        url.parse(x.importer).path, // .replace(moduleRE, ''),
+                    ),
+                )
+                // importerDir = path.posix.join(
+                //     root,
+                //     importerDir.startsWith('/')
+                //         ? importerDir.slice(1)
+                //         : importerDir,
+                // )
+                const importPath = cleanImportPath.replace(moduleRE, '')
+                const file = defaultResolver(importerDir, importPath) // TODO what if this file is outside root, how deep will the web_modules folder? will it work?
+                return {
+                    [cleanImportPath]: file,
+                }
+            }),
+    )
+    return installEntrypoints
+}
+
 function isNodeModule(p: string) {
     const res = p.includes('node_modules')
     // console.log({ isNodeModule: res, p })
