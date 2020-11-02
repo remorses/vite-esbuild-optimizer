@@ -7,6 +7,10 @@ import {
     traverseEsModules,
     urlResolver,
 } from 'es-module-traversal'
+import {
+    resolveOptimizedCacheDir,
+    OPTIMIZE_CACHE_DIR,
+} from 'vite/dist/node/optimizer'
 import { traverseWithEsbuild } from 'es-module-traversal/dist/traverseEsbuild'
 import path from 'path'
 import fsx from 'fs-extra'
@@ -25,6 +29,7 @@ const HASH_FILE_NAME = '.optimizer-hash'
 const DO_NOT_OPTIMIZE = 'DO_NOT_OPTIMIZE'
 const READY_EVENT = 'READY_EVENT'
 const CACHE_FILE = 'cached.json'
+const ANALYSIS_FILE = '_analysis.json'
 
 type Cache = {
     bundleMap: BundleMap
@@ -56,6 +61,11 @@ export function esbuildOptimizerServerPlugin({
     // const linkedPackages = new Set(link)
 
     return function plugin({ app, root, watcher, config, resolver, server }) {
+        const analysisFile = path.join(
+            resolveOptimizedCacheDir(root),
+            ANALYSIS_FILE,
+        )
+
         force = force || config['force']
         const dest = path.join(root, 'web_modules/node_modules')
         let { bundleMap = {}, dependenciesPaths = [] } = readCache({
@@ -107,6 +117,8 @@ export function esbuildOptimizerServerPlugin({
                 dest,
                 entryPoints: dependenciesPaths,
             })
+            await fsx.createFile(analysisFile)
+            // TODO write commonjs packages to analysis {isCommonjs: {}} OptimizeAnalysisResult
 
             // console.log({ nonChachedBundleMap })
 
@@ -164,91 +176,18 @@ export function esbuildOptimizerServerPlugin({
                 if (resolved && bundleMap[resolved]) {
                     let bundlePath = bundleMap[resolved]
 
-                    redirect(bundlePath)
+                    return redirect(bundlePath)
                 }
-                // console.log({ resolved, importerDir })
             }
 
-            // console.log({bundleMap})
-
-            // else {
-            //     console.log(ctx.path)
-
-            //     // try to rebundle dependencies if an import path is not found
-            //     const resolvedPath = resolver.requestToFile(ctx.path)
-            //     if (
-            //         ctx.query[DO_NOT_OPTIMIZE] == null &&
-            //         moduleRE.test(ctx.path) &&
-            //         isNodeModule(resolvedPath)
-            //     ) {
-            //         // console.log({ p: resolver.requestToFile(ctx.path) })
-            //         console.info(`trying to optimize module for ${ctx.path}`)
-
-            //         const importer = ctx.get('referer')
-
-            //         // console.log({ importer })
-            //         if (!importer) {
-            //             console.log('no referer for ' + ctx.path)
-            //             return // source maps request sometimes have no referer
-            //         }
-            //         // TODO maybe parse the importer to get other possible importPaths?
-            //         // get the imports and rerun optimization
-            //         // const port = ctx.server.address()['port']
-            //         // const baseUrl = `http://localhost:${port}`
-            //         // const entry = addQuery({
-            //         //     urlString: new URL(ctx.path, baseUrl).toString(),
-            //         //     query: DO_NOT_OPTIMIZE,
-            //         // })
-            //         // console.log({ entry })
-            //         // const res = await traverseEsModules({
-            //         //     entryPoints: [entry],
-            //         //     stopTraversing: () => true,
-            //         //     readFile: readFromUrlOrPath,
-            //         //     resolver: urlResolver({
-            //         //         baseUrl,
-            //         //         root,
-            //         //     }),
-            //         // })
-            //         const newEntrypoints = makeEntrypoints({
-            //             requestToFile: resolver.requestToFile,
-            //             imports: [
-            //                 {
-            //                     importPath: ctx.path,
-            //                     importer,
-            //                     resolvedImportPath: resolvedPath,
-            //                 },
-            //             ],
-            //         })
-            //         installEntrypoints = {
-            //             ...installEntrypoints,
-            //             ...newEntrypoints,
-            //         }
-            //         const { importMap, stats } = await bundleWithEsBuild({
-            //             // make esbuild build incrementally
-            //             dest,
-            //             installEntrypoints,
-            //         })
-            //         bundleMap = importMapToResolutionsMap({
-            //             dest,
-            //             importMap,
-            //             root,
-            //         })
-
-            //         await updateCache({
-            //             cache: {
-            //                 installEntrypoints,
-            //                 bundleMap,
-            //             },
-            //             dest,
-            //         })
-
-            //         // console.log({ bundleMap, path: ctx.path })
-
-            //         console.info(printStats(stats))
-            //         console.info('Optimized dependencies\n')
-            //         redirect()
-            //     }
-            // }
+            if (moduleRE.test(ctx.path)) {
+                console.error(
+                    `WARNING: using a non optimized dependency '${ctx.url.replace(
+                        moduleRE,
+                        '',
+                    )}'\nRestart the server with 'vite --force' to optimize dependencies again`,
+                )
+            }
         })
     }
 }
@@ -323,7 +262,6 @@ export function addQuery({ urlString, query }) {
     parsed.searchParams.append(query, '')
     return parsed.toString()
 }
-
 
 function makeEntrypoints({
     imports,

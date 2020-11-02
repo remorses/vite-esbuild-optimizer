@@ -1,9 +1,11 @@
+import { defaultResolver } from 'es-module-traversal'
 import { build as esbuild, Metadata } from 'esbuild'
 import fs from 'fs'
 import { invert } from 'lodash/fp'
 import path from 'path'
 import toUnixPath from 'slash'
 import tmpfile from 'tmpfile'
+import { CustomResolverPlugin } from './plugins'
 import { DependencyStatsOutput } from './stats'
 
 export async function bundleWithEsBuild({
@@ -40,6 +42,8 @@ export async function bundleWithEsBuild({
             global: 'window',
             ...generateEnvReplacements(env),
         },
+        inject: [require.resolve('esbuild-polyfills')],
+        plugins: [CustomResolverPlugin({ resolver: defaultResolver })],
         // TODO inject polyfills for runtime globals like process, ...etc
         // TODO allow importing from node builtins when using allowNodeImports
         // TODO add plugin for pnp resolution
