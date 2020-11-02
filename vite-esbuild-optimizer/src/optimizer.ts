@@ -7,6 +7,7 @@ import {
     traverseEsModules,
     urlResolver,
 } from 'es-module-traversal'
+import { traverseWithEsbuild } from 'es-module-traversal/dist/traverseEsbuild'
 import path from 'path'
 import fsx from 'fs-extra'
 import fs from 'fs-extra'
@@ -15,18 +16,35 @@ import { createHash } from 'crypto'
 import { promises as fsp } from 'fs'
 import url, { URL } from 'url'
 import type { ServerPlugin, UserConfig } from 'vite'
-import { bundleWithEsBuild } from './esbuild'
+import { BundleMap, bundleWithEsBuild } from './esbuild'
 import { printStats } from './stats'
+import fromEntries from 'fromentries'
 
-const moduleRE = /^\/@modules\//
+const moduleRE = /^\/?@modules\//
 const HASH_FILE_NAME = '.optimizer-hash'
 const DO_NOT_OPTIMIZE = 'DO_NOT_OPTIMIZE'
 const READY_EVENT = 'READY_EVENT'
 const CACHE_FILE = 'cached.json'
 
 type Cache = {
-    webModulesResolutions: Record<string, string>
-    installEntrypoints: Record<string, string>
+    bundleMap: BundleMap
+    dependenciesPaths: string[]
+}
+
+function relativePathFromUrl(url: string) {
+    if (url.startsWith('http')) {
+        const p = new URL(url).pathname
+        return p.startsWith('/') ? p.slice(1) : p
+    }
+    return url
+}
+
+function pathFromUrl(url: string) {
+    if (url.startsWith('http')) {
+        const p = new URL(url).pathname
+        return p
+    }
+    return url
 }
 
 export function esbuildOptimizerServerPlugin({
@@ -37,9 +55,10 @@ export function esbuildOptimizerServerPlugin({
 
     // const linkedPackages = new Set(link)
 
-    return ({ app, root, watcher, config, resolver, server }) => {
+    return function plugin({ app, root, watcher, config, resolver, server }) {
+        force = force || config['force']
         const dest = path.join(root, 'web_modules/node_modules')
-        let { webModulesResolutions, installEntrypoints } = readCache({
+        let { bundleMap = {}, dependenciesPaths = [] } = readCache({
             dest,
             force,
         })
@@ -48,7 +67,7 @@ export function esbuildOptimizerServerPlugin({
 
         let ready = new EventEmitter()
 
-        server.once('listening', async () => {
+        server.once('listening', async function optimize() {
             const depHash = await getDepHash(root)
             if (!force) {
                 let prevHash = await fsp
@@ -69,60 +88,40 @@ export function esbuildOptimizerServerPlugin({
 
             const port = server.address()['port']
 
-            const baseUrl = `http://localhost:${port}`
+            // TODO this could be implemented with the esbuild traverser
+            // get node_modules resolved paths traversing entrypoints
+            dependenciesPaths = await getDependenciesPaths({
+                entryPoints,
+                root,
 
-            const localUrlResolver = urlResolver({
-                root: path.resolve(root),
-                baseUrl,
-            })
-
-            // serve react refresh runtime
-            const traversalResult = await traverseEsModules({
-                entryPoints: entryPoints.map((entry) =>
-                    formatPathToUrl({ baseUrl, entry }),
-                ),
-                stopTraversing: (importPath) => {
-                    // TODO add importer dir to stopTraversing
-                    return (
-                        moduleRE.test(importPath) &&
-                        isNodeModule(resolver.requestToFile(importPath)) // TODO requestToFile should always accept second argument or linked packages resolution will fail
-                    )
-                },
-                resolver: localUrlResolver,
-                readFile: readFromUrlOrPath,
-            })
-            // TODO remove urls from the traversal result and use paths instead using requestToFile and using the importer path
-            // this way i could replace the traversal algo to use esbuild instead
-
-            // console.log({traversalResult})
-
-            // create a map from server incoming path -> real path on disk
-            installEntrypoints = makeEntrypoints({
                 requestToFile: resolver.requestToFile,
-                imports: traversalResult,
+                baseUrl: `http://localhost:${port}`,
             })
-            rimraf.sync(dest)
 
-            // bundle and create a map from server incoming path -> bundle path on disk
-            const { importMap, stats } = await bundleWithEsBuild({
+            // bundle and create a map from node module path -> bundle path on disk
+            rimraf.sync(dest)
+            const {
+                bundleMap: nonChachedBundleMap,
+                stats,
+            } = await bundleWithEsBuild({
                 dest,
-                installEntrypoints,
+                entryPoints: dependenciesPaths,
             })
+
+            // console.log({ nonChachedBundleMap })
 
             // create a map with incoming server path -> bundle server path
-            webModulesResolutions = importMapToResolutionsMap({
-                dest,
-                importMap,
-                root,
-            })
+            bundleMap = nonChachedBundleMap
 
             await updateCache({
                 cache: {
-                    webModulesResolutions,
-                    installEntrypoints,
+                    bundleMap,
+                    dependenciesPaths,
                 },
                 dest,
             })
+
+            // console.log({ bundleMap })
 
             console.info(printStats(stats))
             console.info('Optimized dependencies\n')
@@ -139,108 +138,183 @@ export function esbuildOptimizerServerPlugin({
 
             await next()
 
-            function redirect() {
+            function redirect(absPath) {
                 ctx.type = 'js'
-                ctx.redirect(cleanUrl(webModulesResolutions[ctx.path])) // TODO instead of mapping from pathname map from real node_module path on disk
+                absPath = '/' + path.relative(root, absPath) // format to server path for redirection
+                console.log(ctx.path, '->', absPath)
+                ctx.redirect(absPath) // TODO instead of mapping from pathname map from real node_module path on disk
             }
-            // console.log({webModulesResolutions})
+            // try to get resolved file
+            if (
+                ctx.type === 'application/javascript' &&
+                moduleRE.test(ctx.path)
+            ) {
+                const importerDir =
+                    ctx.get('referer') &&
+                    resolver.requestToFile(
+                        pathFromUrl(ctx.get('referer')), // should not be node_module, i can omit importer
+                    )
 
-            if (webModulesResolutions[cleanUrl(ctx.path)]) {
-                redirect()
-            } else {
-                console.log(ctx.path)
+                const resolved = defaultResolver(
+                    // TODO here requestToFIle also works even if it should not
+                    path.dirname(importerDir),
+                    ctx.path.slice(1).replace(moduleRE, ''),
+                ) // TODO how can i resolve stuff in linked packages
+                // console.log({ resolved })
+                if (resolved && bundleMap[resolved]) {
+                    let bundlePath = bundleMap[resolved]
 
-                // try to rebundle dependencies if an import path is not found
-                const resolvedPath = resolver.requestToFile(ctx.path)
-                if (
-                    ctx.query[DO_NOT_OPTIMIZE] == null &&
-                    moduleRE.test(ctx.path) &&
-                    isNodeModule(resolvedPath)
-                ) {
-                    // console.log({ p: resolver.requestToFile(ctx.path) })
-                    console.info(`trying to optimize module for ${ctx.path}`)
-
-                    const importer = ctx.get('referer')
-
-                    // console.log({ importer })
-                    if (!importer) {
-                        console.log('no referer for ' + ctx.path)
-                        return // source maps request sometimes have no referer
-                    }
-                    // TODO maybe parse the importer to get other possible importPaths?
-                    // get the imports and rerun optimization
-                    // const port = ctx.server.address()['port']
-                    // const baseUrl = `http://localhost:${port}`
-                    // const entry = addQuery({
-                    //     urlString: new URL(ctx.path, baseUrl).toString(),
-                    //     query: DO_NOT_OPTIMIZE,
-                    // })
-                    // console.log({ entry })
-                    // const res = await traverseEsModules({
-                    //     entryPoints: [entry],
-                    //     stopTraversing: () => true,
-                    //     readFile: readFromUrlOrPath,
-                    //     resolver: urlResolver({
-                    //         baseUrl,
-                    //         root,
-                    //     }),
-                    // })
-                    const newEntrypoints = makeEntrypoints({
-                        requestToFile: resolver.requestToFile,
-                        imports: [
-                            {
-                                importPath: ctx.path,
-                                importer,
-                                resolvedImportPath: resolvedPath,
-                            },
-                        ],
-                    })
-                    installEntrypoints = {
-                        ...installEntrypoints,
-                        ...newEntrypoints,
-                    }
-                    const { importMap, stats } = await bundleWithEsBuild({
-                        // make esbuild build incrementally
-                        dest,
-                        installEntrypoints,
-                    })
-                    webModulesResolutions = importMapToResolutionsMap({
-                        dest,
-                        importMap,
-                        root,
-                    })
-
-                    await updateCache({
-                        cache: {
-                            installEntrypoints,
-                            webModulesResolutions,
-                        },
-                        dest,
-                    })
-
-                    // console.log({ webModulesResolutions, path: ctx.path })
-
-                    console.info(printStats(stats))
-                    console.info('Optimized dependencies\n')
-                    redirect()
+                    redirect(bundlePath)
                 }
+                // console.log({ resolved, importerDir })
             }
+
+            // console.log({bundleMap})
+
+            // else {
+            //     console.log(ctx.path)
+
+            //     // try to rebundle dependencies if an import path is not found
+            //     const resolvedPath = resolver.requestToFile(ctx.path)
+            //     if (
+            //         ctx.query[DO_NOT_OPTIMIZE] == null &&
+            //         moduleRE.test(ctx.path) &&
+            //         isNodeModule(resolvedPath)
+            //     ) {
+            //         // console.log({ p: resolver.requestToFile(ctx.path) })
+            //         console.info(`trying to optimize module for ${ctx.path}`)
+
+            //         const importer = ctx.get('referer')
+
+            //         // console.log({ importer })
+            //         if (!importer) {
+            //             console.log('no referer for ' + ctx.path)
+            //             return // source maps request sometimes have no referer
+            //         }
+            //         // TODO maybe parse the importer to get other possible importPaths?
+            //         // get the imports and rerun optimization
+            //         // const port = ctx.server.address()['port']
+            //         // const baseUrl = `http://localhost:${port}`
+            //         // const entry = addQuery({
+            //         //     urlString: new URL(ctx.path, baseUrl).toString(),
+            //         //     query: DO_NOT_OPTIMIZE,
+            //         // })
+            //         // console.log({ entry })
+            //         // const res = await traverseEsModules({
+            //         //     entryPoints: [entry],
+            //         //     stopTraversing: () => true,
+            //         //     readFile: readFromUrlOrPath,
+            //         //     resolver: urlResolver({
+            //         //         baseUrl,
+            //         //         root,
+            //         //     }),
+            //         // })
+            //         const newEntrypoints = makeEntrypoints({
+            //             requestToFile: resolver.requestToFile,
+            //             imports: [
+            //                 {
+            //                     importPath: ctx.path,
+            //                     importer,
+            //                     resolvedImportPath: resolvedPath,
+            //                 },
+            //             ],
+            //         })
+            //         installEntrypoints = {
+            //             ...installEntrypoints,
+            //             ...newEntrypoints,
+            //         }
+            //         const { importMap, stats } = await bundleWithEsBuild({
+            //             // make esbuild build incrementally
+            //             dest,
+            //             installEntrypoints,
+            //         })
+            //         bundleMap = importMapToResolutionsMap({
+            //             dest,
+            //             importMap,
+            //             root,
+            //         })
+
+            //         await updateCache({
+            //             cache: {
+            //                 installEntrypoints,
+            //                 bundleMap,
+            //             },
+            //             dest,
+            //         })
+
+            //         // console.log({ bundleMap, path: ctx.path })
+
+            //         console.info(printStats(stats))
+            //         console.info('Optimized dependencies\n')
+            //         redirect()
+            //     }
+            // }
         })
     }
 }
 
-function importMapToResolutionsMap({ importMap, dest, root }) {
-    const resolutionsMap = {}
-    Object.keys(importMap).forEach((importPath) => {
-        let resolvedFile = path.posix.resolve(dest, importMap[importPath])
-
-        // make url always /web_modules/...
-        resolvedFile = '/' + path.posix.relative(root, resolvedFile)
-
-        // console.log(importPath, '-->', resolvedFile)
-        resolutionsMap[importPath] = resolvedFile
+async function getDependenciesPathsEsbuild({
+    entryPoints,
+    root,
+    requestToFile,
+}) {
+    const res = await traverseWithEsbuild({
+        entryPoints: entryPoints.map((x) => requestToFile(x)),
     })
-    return resolutionsMap
+    return res.map((x) => x.resolvedImportPath)
+}
+
+// returns list of paths of all dependencies found traversing the entrypoints
+async function getDependenciesPaths({
+    entryPoints,
+    baseUrl,
+    root,
+    requestToFile,
+}) {
+    // serve react refresh runtime
+    const traversalResult = await traverseEsModules({
+        entryPoints: entryPoints.map((entry) =>
+            formatPathToUrl({ baseUrl, entry }),
+        ),
+        stopTraversing: (importPath, context) => {
+            // TODO add importer dir to stopTraversing
+            // console.log({ importPath, context })
+
+            return (
+                moduleRE.test(importPath) &&
+                isNodeModule(
+                    defaultResolver(
+                        // TODO here resolve fails for non node_modules is it ok?
+                        requestToFile(pathFromUrl(context)),
+                        relativePathFromUrl(importPath).replace(moduleRE, ''),
+                    ),
+                ) // TODO requestToFile should always accept second argument or linked packages resolution will fail
+            )
+        },
+        resolver: urlResolver({
+            root: path.resolve(root),
+            baseUrl,
+        }),
+        readFile: (x, y) => {
+            return readFromUrlOrPath(x, y)
+        },
+    })
+    let resolvedFiles = traversalResult
+        .map((x) => {
+            const importerDir = requestToFile(
+                pathFromUrl(x.importer), // should not be node_module, i can omit importer
+            )
+            // console.log({ importerDir: x.importer })
+
+            const resolved = defaultResolver(
+                importerDir,
+                relativePathFromUrl(x.resolvedImportPath).replace(moduleRE, ''), // TODO in esbuild these path will be already resolved
+            )
+            return resolved
+        })
+        .filter((x) => isNodeModule(x))
+    resolvedFiles = Array.from(new Set(resolvedFiles))
+    return resolvedFiles
 }
 
 export function addQuery({ urlString, query }) {
@@ -249,6 +323,7 @@ export function addQuery({ urlString, query }) {
     parsed.searchParams.append(query, '')
     return parsed.toString()
 }
+
 
 function makeEntrypoints({
     imports,
@@ -342,15 +417,20 @@ const cleanUrl = (url: string) => {
 const sleep = (t) => new Promise((res) => setTimeout(res, t))
 
 function readCache({ dest, force }): Cache {
+    const defaultValue = { dependenciesPaths: [], bundleMap: {} }
     if (force) {
-        return { installEntrypoints: {}, webModulesResolutions: {} }
+        return defaultValue
     }
     try {
-        return JSON.parse(
+        const parsed: Cache = JSON.parse(
             fs.readFileSync(path.join(dest, CACHE_FILE)).toString(),
         )
+        // assert all files are present
+        Object.values(parsed.bundleMap).map((bundle) => fs.accessSync(bundle))
+        parsed.dependenciesPaths.map((bundle) => fs.existsSync(bundle))
     } catch {
-        return { installEntrypoints: {}, webModulesResolutions: {} }
+        fsx.removeSync(path.join(dest, CACHE_FILE))
+        return defaultValue
     }
 }
 

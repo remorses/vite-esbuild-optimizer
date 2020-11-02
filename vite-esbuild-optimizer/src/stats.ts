@@ -30,7 +30,7 @@ export function printStats(dependencyStats: DependencyStatsOutput): string {
         `\n`
     output += `${formatFiles(allDirect, maxFileNameLength)}\n`
     if (Object.values(common).length > 0) {
-        output += `  ⦿ ${chalk.bold('web_modules/common/ (Shared)')}\n`
+        output += `  ⦿ ${chalk.bold('chunks (Shared)')}\n`
         output += `${formatFiles(allCommon, maxFileNameLength)}`
     }
     return `\n${output}\n`

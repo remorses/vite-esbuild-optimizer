@@ -7,7 +7,7 @@ import tmpfile from 'tmpfile'
 import { DependencyStatsOutput } from './stats'
 
 export async function bundleWithEsBuild({
-    installEntrypoints = {} as Record<string, string>,
+    entryPoints,
     dest: destLoc,
     ...options
 }) {
@@ -19,7 +19,7 @@ export async function bundleWithEsBuild({
     } = options
 
     const metafile = path.join(destLoc, './meta.json')
-    const entryPoints = [...Object.values(installEntrypoints)]
+    // const entryPoints = [...Object.values(installEntrypoints)]
 
     const tsconfigTempFile = tmpfile('.json')
     await fs.promises.writeFile(tsconfigTempFile, makeTsConfig({ alias }))
@@ -60,15 +60,15 @@ export async function bundleWithEsBuild({
         await (await fs.promises.readFile(metafile)).toString(),
     )
 
-    const importMap = metafileToImportMap({
-        installEntrypoints,
+    const bundleMap = metafileToBundleMap({
+        entryPoints,
         meta,
         destLoc: destLoc,
     })
 
     const stats = metafileToStats({ meta, destLoc })
 
-    return { stats, importMap }
+    return { stats, bundleMap }
 }
 
 function makeTsConfig({ alias }) {
@@ -84,22 +84,17 @@ function makeTsConfig({ alias }) {
     return JSON.stringify(tsconfig)
 }
 
-function metafileToImportMap(_options: {
-    installEntrypoints: Record<string, string>
+export type BundleMap = Record<string, string>
+
+function metafileToBundleMap(_options: {
+    entryPoints: string[]
     meta: Metadata
     destLoc: string
-}): Record<string, string> {
-    const {
-        destLoc: destLoc,
-        installEntrypoints: installEntrypoints,
-        meta,
-    } = _options
-    const inputFiles = Object.values(installEntrypoints).map((x) =>
-        path.resolve(x),
-    ) // TODO replace resolve with join in cwd
-    const inputFilesToSpecifiers = invert(installEntrypoints)
+}): BundleMap {
+    const { destLoc: destLoc, entryPoints, meta } = _options
+    const inputFiles = entryPoints.map((x) => path.resolve(x)) // TODO replace resolve with join in cwd
 
-    const importMaps: Record<string, string>[] = Object.keys(meta.outputs).map(
+    const maps: Record<string, string>[] = Object.keys(meta.outputs).map(
         (output) => {
             // chunks cannot be entrypoints
             if (path.basename(output).startsWith('chunk.')) {
@@ -112,15 +107,13 @@ function metafileToImportMap(_options: {
             if (!input) {
                 return {}
             }
-            const specifier = inputFilesToSpecifiers[input]
+            // const specifier = inputFilesToSpecifiers[input]
             return {
-                [specifier]:
-                    './' +
-                    toUnixPath(path.normalize(path.relative(destLoc, output))),
+                [input]: toUnixPath(path.normalize(path.resolve(output))),
             }
         },
     )
-    const importMap = Object.assign({}, ...importMaps)
+    const importMap = Object.assign({}, ...maps)
     return importMap
 }
 
