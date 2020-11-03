@@ -181,12 +181,17 @@ export function esbuildOptimizerServerPlugin({
             }
 
             if (moduleRE.test(ctx.path)) {
+                await updateCache({
+                    cache: { bundleMap: {}, dependenciesPaths: [] },
+                    dest,
+                })
                 console.error(
                     `WARNING: using a non optimized dependency '${ctx.url.replace(
                         moduleRE,
                         '',
-                    )}'\nRestart the server with 'vite --force' to optimize dependencies again`,
+                    )}'\nRestart the server to optimize dependencies again`,
                 )
+                // delete cache to optimize on next start
             }
         })
     }
