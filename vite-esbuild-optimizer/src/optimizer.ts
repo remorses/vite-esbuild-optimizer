@@ -239,9 +239,6 @@ async function getDependenciesPaths({
             root: path.resolve(root),
             baseUrl,
         }),
-        readFile: (x, y) => {
-            return readFromUrlOrPath(x, y)
-        },
     })
     let resolvedFiles = traversalResult
         .map((x) => {
