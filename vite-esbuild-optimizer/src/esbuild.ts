@@ -70,7 +70,7 @@ export async function bundleWithEsBuild({
         entryPoints,
         meta,
     })
-    const analysis = metafileToAnalysis({ meta })
+    const analysis = metafileToAnalysis({ meta, entryPoints })
 
     const stats = metafileToStats({ meta, destLoc })
 
@@ -128,12 +128,17 @@ function metafileToBundleMap(_options: {
 
 function metafileToAnalysis(_options: {
     meta: Metadata
+    entryPoints: string[]
 }): OptimizeAnalysisResult {
-    const { meta } = _options
+    const { meta, entryPoints } = _options
+    const inputFiles = new Set(entryPoints.map((x) => path.resolve(x))) // TODO replace resolve with join in cwd
     const analysis: OptimizeAnalysisResult = {
         isCommonjs: fromEntries(
             Object.keys(meta.outputs)
                 .map((output): [string, true] => {
+                    if (path.basename(output).startsWith('chunk.')) {
+                        return
+                    }
                     const info = meta.outputs[output]
                     if (!info) {
                         throw new Error(`cannot find output info for ${output}`)
@@ -144,7 +149,12 @@ function metafileToAnalysis(_options: {
                     if (!isCommonjs) {
                         return
                     }
-                    return [output, isCommonjs] // TODO output must be the import path id
+                    const inputs = Object.keys(meta.outputs[output].inputs)
+                    const input = inputs.find((x) =>
+                        inputFiles.has(path.resolve(x)),
+                    )
+                    // TODO use output as key after i implement custom requestToFile that redirects to optimized bundle
+                    return [input, isCommonjs] // TODO output must be the import path id
                 })
                 .filter(Boolean),
         ),
