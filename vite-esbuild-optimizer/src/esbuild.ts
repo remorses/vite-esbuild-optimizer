@@ -1,12 +1,14 @@
 import { defaultResolver } from 'es-module-traversal'
 import { build as esbuild, Metadata } from 'esbuild'
+import fromEntries from 'fromentries'
 import fs from 'fs'
-import { invert } from 'lodash/fp'
+
 import path from 'path'
 import toUnixPath from 'slash'
 import tmpfile from 'tmpfile'
 import { CustomResolverPlugin } from './plugins'
 import { DependencyStatsOutput } from './stats'
+import { OptimizeAnalysisResult } from './support'
 
 export async function bundleWithEsBuild({
     entryPoints,
@@ -67,12 +69,12 @@ export async function bundleWithEsBuild({
     const bundleMap = metafileToBundleMap({
         entryPoints,
         meta,
-        destLoc: destLoc,
     })
+    const analysis = metafileToAnalysis({ meta })
 
     const stats = metafileToStats({ meta, destLoc })
 
-    return { stats, bundleMap }
+    return { stats, bundleMap, analysis }
 }
 
 function makeTsConfig({ alias }) {
@@ -93,32 +95,61 @@ export type BundleMap = Record<string, string>
 function metafileToBundleMap(_options: {
     entryPoints: string[]
     meta: Metadata
-    destLoc: string
 }): BundleMap {
-    const { destLoc: destLoc, entryPoints, meta } = _options
+    const { entryPoints, meta } = _options
     const inputFiles = entryPoints.map((x) => path.resolve(x)) // TODO replace resolve with join in cwd
 
-    const maps: Record<string, string>[] = Object.keys(meta.outputs).map(
-        (output) => {
+    const maps: Array<[string, string]> = Object.keys(meta.outputs)
+        .map((output): [string, string] | undefined => {
             // chunks cannot be entrypoints
             if (path.basename(output).startsWith('chunk.')) {
-                return {}
+                return
             }
             const inputs = Object.keys(meta.outputs[output].inputs).map((x) =>
                 path.resolve(x),
             ) // TODO will this resolve work with pnp?
             const input = inputs.find((x) => inputFiles.includes(x))
             if (!input) {
-                return {}
+                return
             }
             // const specifier = inputFilesToSpecifiers[input]
-            return {
-                [input]: toUnixPath(path.normalize(path.resolve(output))),
-            }
-        },
+            return [input, output]
+        })
+        .filter(Boolean)
+
+    const bundleMap = fromEntries(
+        maps.map(([k, output]) => {
+            return [k, toUnixPath(path.normalize(path.resolve(output)))] // TODO relative path
+        }),
     )
-    const importMap = Object.assign({}, ...maps)
-    return importMap
+
+    return bundleMap
+}
+
+function metafileToAnalysis(_options: {
+    meta: Metadata
+}): OptimizeAnalysisResult {
+    const { meta } = _options
+    const analysis: OptimizeAnalysisResult = {
+        isCommonjs: fromEntries(
+            Object.keys(meta.outputs)
+                .map((output): [string, true] => {
+                    const info = meta.outputs[output]
+                    if (!info) {
+                        throw new Error(`cannot find output info for ${output}`)
+                    }
+                    const isCommonjs =
+                        info.exports.length === 1 &&
+                        info.exports[0] === 'default'
+                    if (!isCommonjs) {
+                        return
+                    }
+                    return [output, isCommonjs] // TODO output must be the import path id
+                })
+                .filter(Boolean),
+        ),
+    }
+    return analysis
 }
 
 function metafileToStats(_options: {

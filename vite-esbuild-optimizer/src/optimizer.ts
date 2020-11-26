@@ -1,5 +1,6 @@
 import rimraf from 'rimraf'
 import { EventEmitter, once } from 'events'
+
 import {
     defaultResolver,
     readFromUrlOrPath,
@@ -7,10 +8,7 @@ import {
     traverseEsModules,
     urlResolver,
 } from 'es-module-traversal'
-import {
-    resolveOptimizedCacheDir,
-    OPTIMIZE_CACHE_DIR,
-} from 'vite/dist/node/optimizer'
+
 import { traverseWithEsbuild } from 'es-module-traversal/dist/traverseEsbuild'
 import path from 'path'
 import fsx from 'fs-extra'
@@ -20,6 +18,7 @@ import { createHash } from 'crypto'
 import { promises as fsp } from 'fs'
 import url, { URL } from 'url'
 import type { ServerPlugin, UserConfig } from 'vite'
+import { resolveOptimizedCacheDir } from 'vite/dist/node/optimizer'
 import { BundleMap, bundleWithEsBuild } from './esbuild'
 import { printStats } from './stats'
 import fromEntries from 'fromentries'
@@ -46,14 +45,9 @@ export function esbuildOptimizerServerPlugin({
     // const linkedPackages = new Set(link)
 
     return function plugin({ app, root, watcher, config, resolver, server }) {
-        const analysisFile = path.join(
-            resolveOptimizedCacheDir(root),
-            ANALYSIS_FILE,
-        )
-
         force = force || config['force']
         const dest = path.join(root, 'web_modules/node_modules')
-        let { bundleMap = {}, dependenciesPaths = [] } = readCache({
+        let { bundleMap = {}, dependenciesPaths = [], stale } = readCache({
             dest,
             force,
         })
@@ -64,7 +58,7 @@ export function esbuildOptimizerServerPlugin({
 
         server.once('listening', async function optimize() {
             const depHash = await getDepHash(root)
-            if (!force) {
+            if (!force && !stale) {
                 let prevHash = await fsp
                     .readFile(hashPath, 'utf-8')
                     .catch(() => '')
@@ -97,13 +91,20 @@ export function esbuildOptimizerServerPlugin({
             await fs.remove(dest)
             const {
                 bundleMap: nonCachedBundleMap,
+                analysis,
                 stats,
             } = await bundleWithEsBuild({
                 dest,
                 entryPoints: dependenciesPaths,
             })
+
+            const analysisFile = path.join(
+                resolveOptimizedCacheDir(root),
+                ANALYSIS_FILE,
+            )
             await fsx.createFile(analysisFile)
-            // TODO write commonjs packages to analysis {isCommonjs: {}} OptimizeAnalysisResult
+            // console.log({ analysis })
+            await fs.writeFile(analysisFile, JSON.stringify(analysis, null, 4))
 
             // create a map with incoming server path -> bundle server path
             bundleMap = nonCachedBundleMap
@@ -155,6 +156,7 @@ export function esbuildOptimizerServerPlugin({
                 // console.log({ resolved })
                 if (resolved && bundleMap[resolved]) {
                     let bundlePath = bundleMap[resolved]
+                    // TODO check if file exist before?
 
                     return redirect(bundlePath)
                 }
@@ -164,10 +166,8 @@ export function esbuildOptimizerServerPlugin({
                 moduleRE.test(ctx.path) &&
                 isNodeModule(resolver.requestToFile(ctx.url))
             ) {
-                await updateCache({
-                    cache: { bundleMap: {}, dependenciesPaths: [] },
-                    dest,
-                })
+                await fs.remove(hashPath)
+                return
                 console.error(
                     `WARNING: using a non optimized dependency '${ctx.url.replace(
                         moduleRE,
@@ -277,8 +277,8 @@ async function updateHash(hashPath: string, newHash: string) {
     await fsx.writeFile(hashPath, newHash.trim())
 }
 
-function readCache({ dest, force }): Cache {
-    const defaultValue = { dependenciesPaths: [], bundleMap: {} }
+function readCache({ dest, force }): Cache & { stale: boolean } {
+    const defaultValue = { dependenciesPaths: [], bundleMap: {}, stale: false }
     if (force) {
         return defaultValue
     }
@@ -289,6 +289,10 @@ function readCache({ dest, force }): Cache {
         // assert all files are present
         Object.values(parsed.bundleMap).map((bundle) => fs.accessSync(bundle))
         parsed.dependenciesPaths.map((bundle) => fs.existsSync(bundle))
+        return {
+            ...parsed,
+            stale: false,
+        }
     } catch {
         fsx.removeSync(path.join(dest, CACHE_FILE))
         return defaultValue

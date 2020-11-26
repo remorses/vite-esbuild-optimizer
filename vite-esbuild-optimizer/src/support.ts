@@ -19,3 +19,7 @@ function getPackageNameFromImportPath(importPath: string) {
 export function isUrl(req: string) {
     return req.startsWith('http://') || req.startsWith('https://')
 }
+
+export interface OptimizeAnalysisResult { // TODO import from vite
+    isCommonjs: { [name: string]: true }
+}
