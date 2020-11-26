@@ -2,7 +2,6 @@ import { defaultResolver } from 'es-module-traversal'
 import { build as esbuild, Metadata } from 'esbuild'
 import fromEntries from 'fromentries'
 import fs from 'fs'
-
 import path from 'path'
 import toUnixPath from 'slash'
 import tmpfile from 'tmpfile'

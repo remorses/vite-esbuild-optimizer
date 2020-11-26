@@ -4,7 +4,6 @@ it('ready', () => {
     assert(true)
 })
 
-
 // async function main() {
 //   await esbuild({
 //     entryPoints: ['lodash-es'],

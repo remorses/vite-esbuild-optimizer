@@ -1,5 +1,5 @@
-import { addQuery } from '../src/optimizer'
 import assert from 'assert'
+import { addQuery } from '../src/optimizer'
 
 it('addQuery', () => {
     var res = addQuery({ query: 'ciao', urlString: 'http://x.com' })

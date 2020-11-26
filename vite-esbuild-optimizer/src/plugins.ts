@@ -1,6 +1,5 @@
-import { Plugin } from 'esbuild'
 import builtins from 'builtin-modules'
-import path from 'path'
+import { Plugin } from 'esbuild'
 
 // resolve node builtins
 

@@ -1,32 +1,24 @@
-import rimraf from 'rimraf'
-import { EventEmitter, once } from 'events'
-
+import { createHash } from 'crypto'
 import {
     defaultResolver,
-    readFromUrlOrPath,
     TraversalResultType,
     traverseEsModules,
     urlResolver,
 } from 'es-module-traversal'
-
 import { traverseWithEsbuild } from 'es-module-traversal/dist/traverseEsbuild'
-import path from 'path'
-import fsx from 'fs-extra'
-import fs from 'fs-extra'
 import findUp from 'find-up'
-import { createHash } from 'crypto'
 import { promises as fsp } from 'fs'
+import { default as fs, default as fsx } from 'fs-extra'
+import path from 'path'
 import url, { URL } from 'url'
-import type { ServerPlugin, UserConfig } from 'vite'
+import type { ServerPlugin } from 'vite'
 import { resolveOptimizedCacheDir } from 'vite/dist/node/optimizer'
 import { BundleMap, bundleWithEsBuild } from './esbuild'
 import { printStats } from './stats'
-import fromEntries from 'fromentries'
 import { isUrl, Mutex, osAgnosticPath } from './support'
 
 const moduleRE = /^\/?@modules\//
 const HASH_FILE_NAME = '.optimizer-hash'
-const DO_NOT_OPTIMIZE = 'DO_NOT_OPTIMIZE'
 
 const CACHE_FILE = 'cached.json'
 const ANALYSIS_FILE = '_analysis.json'
