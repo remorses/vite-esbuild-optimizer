@@ -1,7 +1,7 @@
 import { SomeComponent } from 'example-linked-package'
 // axios is a commonjs package
 import { merge } from 'lodash-es'
-import React, { useState } from 'react'
+import React from 'react'
 import merger from 'lodash-es/has'
 merger
 import('lodash-es/has')
@@ -18,7 +18,7 @@ merge({}, {})
 // m({}, {})
 
 function App() {
-    const [hello] = useState('hello')
+    const [hello] = React.useState('hello')
     return (
         <div>
             <p>Example</p>
