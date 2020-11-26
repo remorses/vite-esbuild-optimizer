@@ -22,12 +22,12 @@ import { resolveOptimizedCacheDir } from 'vite/dist/node/optimizer'
 import { BundleMap, bundleWithEsBuild } from './esbuild'
 import { printStats } from './stats'
 import fromEntries from 'fromentries'
-import { isUrl } from './support'
+import { isUrl, Mutex } from './support'
 
 const moduleRE = /^\/?@modules\//
 const HASH_FILE_NAME = '.optimizer-hash'
 const DO_NOT_OPTIMIZE = 'DO_NOT_OPTIMIZE'
-const READY_EVENT = 'READY_EVENT'
+
 const CACHE_FILE = 'cached.json'
 const ANALYSIS_FILE = '_analysis.json'
 
@@ -54,7 +54,7 @@ export function esbuildOptimizerServerPlugin({
 
         const hashPath = path.join(dest, HASH_FILE_NAME)
 
-        let ready = new EventEmitter()
+        let mutex = new Mutex()
 
         server.once('listening', async function optimize() {
             const depHash = await getDepHash(root)
@@ -67,7 +67,7 @@ export function esbuildOptimizerServerPlugin({
                 if (prevHash === depHash) {
                     console.info('Hash is consistent. Skipping optimization.')
                     // TODO check that every bundle in resolution map exists on disk, if not rerun optimization
-                    ready.emit(READY_EVENT)
+                    mutex.ready()
                     return
                 }
             }
@@ -121,15 +121,15 @@ export function esbuildOptimizerServerPlugin({
 
             console.info(printStats(stats))
             console.info('Optimized dependencies\n')
-            ready.emit(READY_EVENT)
+            mutex.ready()
         })
 
-        let hasWaited = false
         app.use(async (ctx, next) => {
-            if (ctx.url === '/index.html' && !hasWaited) {
-                // TODO use special request header to not make the url resolver wait
-                await once(ready, READY_EVENT)
-                hasWaited = true // TODO set ready to false every time we start bundling so that if same module is requested at the sae time it is not rebuilt 2 times or different files do not overwrite the result maps
+            if (
+                !mutex.isReady &&
+                ctx.get('user-agent') !== 'es-module-traversal'
+            ) {
+                await mutex.wait()
             }
 
             await next()

@@ -1,3 +1,5 @@
+import { EventEmitter, once } from 'events'
+
 const queryRE = /\?.*$/
 const hashRE = /#.*$/
 const moduleRE = /^\/?@modules\//
@@ -20,6 +22,24 @@ export function isUrl(req: string) {
     return req.startsWith('http://') || req.startsWith('https://')
 }
 
-export interface OptimizeAnalysisResult { // TODO import from vite
+export interface OptimizeAnalysisResult {
+    // TODO import from vite
     isCommonjs: { [name: string]: true }
+}
+
+export class Mutex extends EventEmitter {
+    READY_EVENT = 'READY_EVENT'
+    isReady = false
+    constructor() {
+        super()
+        this.once(this.READY_EVENT, () => {
+            this.isReady = true
+        })
+    }
+    ready() {
+        this.emit(this.READY_EVENT)
+    }
+    wait(): Promise<any> {
+        return once(this, this.READY_EVENT)
+    }
 }

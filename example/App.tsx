@@ -14,6 +14,7 @@ has
 console.log(new Error('hello'))
 
 merge({}, {})
+
 // m({}, {})
 
 function App() {
