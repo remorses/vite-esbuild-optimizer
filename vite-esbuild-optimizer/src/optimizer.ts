@@ -23,6 +23,7 @@ import type { ServerPlugin, UserConfig } from 'vite'
 import { BundleMap, bundleWithEsBuild } from './esbuild'
 import { printStats } from './stats'
 import fromEntries from 'fromentries'
+import { isUrl } from './support'
 
 const moduleRE = /^\/?@modules\//
 const HASH_FILE_NAME = '.optimizer-hash'
@@ -34,22 +35,6 @@ const ANALYSIS_FILE = '_analysis.json'
 type Cache = {
     bundleMap: BundleMap
     dependenciesPaths: string[]
-}
-
-function relativePathFromUrl(url: string) {
-    if (url.startsWith('http')) {
-        const p = new URL(url).pathname
-        return p.startsWith('/') ? p.slice(1) : p
-    }
-    return url
-}
-
-function pathFromUrl(url: string) {
-    if (url.startsWith('http')) {
-        const p = new URL(url).pathname
-        return p
-    }
-    return url
 }
 
 export function esbuildOptimizerServerPlugin({
@@ -161,7 +146,7 @@ export function esbuildOptimizerServerPlugin({
                 ctx.type === 'application/javascript' &&
                 moduleRE.test(ctx.path)
             ) {
-                const importerDir =
+                const importer =
                     ctx.get('referer') &&
                     resolver.requestToFile(
                         pathFromUrl(ctx.get('referer')), // should not be node_module, i can omit importer
@@ -169,7 +154,7 @@ export function esbuildOptimizerServerPlugin({
 
                 const resolved = defaultResolver(
                     // TODO here requestToFIle also works even if it should not
-                    path.dirname(importerDir),
+                    path.dirname(importer),
                     ctx.path.slice(1).replace(moduleRE, ''),
                 ) // TODO how can i resolve stuff in linked packages
                 // console.log({ resolved })
@@ -232,7 +217,7 @@ async function getDependenciesPaths({
                         requestToFile(pathFromUrl(context)),
                         relativePathFromUrl(importPath).replace(moduleRE, ''),
                     ),
-                ) // TODO requestToFile should always accept second argument or linked packages resolution will fail
+                )
             )
         },
         resolver: urlResolver({
@@ -242,9 +227,7 @@ async function getDependenciesPaths({
     })
     let resolvedFiles = traversalResult
         .map((x) => {
-            const importerDir = requestToFile(
-                pathFromUrl(x.importer), // should not be node_module, i can omit importer
-            )
+            const importerDir = requestToFile(pathFromUrl(x.importer))
             // console.log({ importerDir: x.importer })
 
             const resolved = defaultResolver(
@@ -296,8 +279,6 @@ async function updateHash(hashPath: string, newHash: string) {
     await fsx.writeFile(hashPath, newHash.trim())
 }
 
-
-
 function readCache({ dest, force }): Cache {
     const defaultValue = { dependenciesPaths: [], bundleMap: {} }
     if (force) {
@@ -321,4 +302,20 @@ async function updateCache({ dest, cache }: { cache: Cache; dest: string }) {
         path.join(dest, CACHE_FILE),
         JSON.stringify(cache, null, 4),
     )
+}
+
+function relativePathFromUrl(url: string) {
+    if (!isUrl(url)) {
+        return url
+    }
+    const p = pathFromUrl(url)
+    return p.startsWith('/') ? p.slice(1) : p
+}
+
+function pathFromUrl(req: string) {
+    if (isUrl(req)) {
+        const p = url.parse(req).path
+        return p
+    }
+    return req
 }

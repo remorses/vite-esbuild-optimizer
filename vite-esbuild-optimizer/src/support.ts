@@ -15,3 +15,7 @@ function getPackageNameFromImportPath(importPath: string) {
     }
     return parts[0]
 }
+
+export function isUrl(req: string) {
+    return req.startsWith('http://') || req.startsWith('https://')
+}
