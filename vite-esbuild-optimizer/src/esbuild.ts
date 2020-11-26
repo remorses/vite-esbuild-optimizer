@@ -97,7 +97,7 @@ function metafileToBundleMap(_options: {
     meta: Metadata
 }): BundleMap {
     const { entryPoints, meta } = _options
-    const inputFiles = entryPoints.map((x) => path.resolve(x)) // TODO replace resolve with join in cwd
+    const inputFiles = new Set(entryPoints.map((x) => path.resolve(x)))
 
     const maps: Array<[string, string]> = Object.keys(meta.outputs)
         .map((output): [string, string] | undefined => {
@@ -105,10 +105,8 @@ function metafileToBundleMap(_options: {
             if (path.basename(output).startsWith('chunk.')) {
                 return
             }
-            const inputs = Object.keys(meta.outputs[output].inputs).map((x) =>
-                path.resolve(x),
-            ) // TODO will this resolve work with pnp?
-            const input = inputs.find((x) => inputFiles.includes(x))
+            const inputs = Object.keys(meta.outputs[output].inputs)
+            const input = inputs.find((x) => inputFiles.has(path.resolve(x)))
             if (!input) {
                 return
             }

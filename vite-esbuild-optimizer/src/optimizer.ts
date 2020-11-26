@@ -138,7 +138,7 @@ export function esbuildOptimizerServerPlugin({
                 ctx.type = 'js'
                 absPath = '/' + path.relative(root, absPath) // format to server path for redirection
                 console.log(ctx.path, '->', absPath)
-                ctx.redirect(absPath) // TODO instead of mapping from pathname map from real node_module path on disk
+                ctx.redirect(absPath)
             }
             // try to get resolved file
             if (moduleRE.test(ctx.path)) {
