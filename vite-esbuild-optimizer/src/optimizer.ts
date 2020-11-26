@@ -94,9 +94,9 @@ export function esbuildOptimizerServerPlugin({
             })
 
             // bundle and create a map from node module path -> bundle path on disk
-            rimraf.sync(dest)
+            await fs.remove(dest)
             const {
-                bundleMap: nonChachedBundleMap,
+                bundleMap: nonCachedBundleMap,
                 stats,
             } = await bundleWithEsBuild({
                 dest,
@@ -105,10 +105,8 @@ export function esbuildOptimizerServerPlugin({
             await fsx.createFile(analysisFile)
             // TODO write commonjs packages to analysis {isCommonjs: {}} OptimizeAnalysisResult
 
-            // console.log({ nonChachedBundleMap })
-
             // create a map with incoming server path -> bundle server path
-            bundleMap = nonChachedBundleMap
+            bundleMap = nonCachedBundleMap
 
             await updateCache({
                 cache: {
@@ -130,8 +128,8 @@ export function esbuildOptimizerServerPlugin({
             if (ctx.url === '/index.html' && !hasWaited) {
                 // TODO use special request header to not make the url resolver wait
                 await once(ready, READY_EVENT)
+                hasWaited = true // TODO set ready to false every time we start bundling so that if same module is requested at the sae time it is not rebuilt 2 times or different files do not overwrite the result maps
             }
-            hasWaited = true // TODO set ready to false every time we start bundling so that if same module is requested at the sae time it is not rebuilt 2 times or different files do not overwrite the result maps
 
             await next()
 
@@ -142,10 +140,7 @@ export function esbuildOptimizerServerPlugin({
                 ctx.redirect(absPath) // TODO instead of mapping from pathname map from real node_module path on disk
             }
             // try to get resolved file
-            if (
-                ctx.type === 'application/javascript' &&
-                moduleRE.test(ctx.path)
-            ) {
+            if (moduleRE.test(ctx.path)) {
                 const importer =
                     ctx.get('referer') &&
                     resolver.requestToFile(
@@ -153,10 +148,10 @@ export function esbuildOptimizerServerPlugin({
                     )
 
                 const resolved = defaultResolver(
-                    // TODO here requestToFIle also works even if it should not
-                    path.dirname(importer),
+                    importer ? path.dirname(importer) : root,
                     ctx.path.slice(1).replace(moduleRE, ''),
-                ) // TODO how can i resolve stuff in linked packages
+                )
+                // TODO resolved files paths should be relative to root, and os agnostic
                 // console.log({ resolved })
                 if (resolved && bundleMap[resolved]) {
                     let bundlePath = bundleMap[resolved]
@@ -165,7 +160,10 @@ export function esbuildOptimizerServerPlugin({
                 }
             }
 
-            if (moduleRE.test(ctx.path)) {
+            if (
+                moduleRE.test(ctx.path) &&
+                isNodeModule(resolver.requestToFile(ctx.url))
+            ) {
                 await updateCache({
                     cache: { bundleMap: {}, dependenciesPaths: [] },
                     dest,
