@@ -167,7 +167,6 @@ export function esbuildOptimizerServerPlugin({
                 isNodeModule(resolver.requestToFile(ctx.url))
             ) {
                 await fs.remove(hashPath)
-                return
                 console.error(
                     `WARNING: using a non optimized dependency '${ctx.url.replace(
                         moduleRE,
