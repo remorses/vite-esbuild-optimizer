@@ -22,7 +22,7 @@ import { resolveOptimizedCacheDir } from 'vite/dist/node/optimizer'
 import { BundleMap, bundleWithEsBuild } from './esbuild'
 import { printStats } from './stats'
 import fromEntries from 'fromentries'
-import { isUrl, Mutex } from './support'
+import { isUrl, Mutex, osAgnosticPath } from './support'
 
 const moduleRE = /^\/?@modules\//
 const HASH_FILE_NAME = '.optimizer-hash'
@@ -66,7 +66,6 @@ export function esbuildOptimizerServerPlugin({
                 // hash is consistent, no need to re-bundle
                 if (prevHash === depHash) {
                     console.info('Hash is consistent. Skipping optimization.')
-                    // TODO check that every bundle in resolution map exists on disk, if not rerun optimization
                     mutex.ready()
                     return
                 }
@@ -77,7 +76,7 @@ export function esbuildOptimizerServerPlugin({
 
             const port = server.address()['port']
 
-            // TODO this could be implemented with the esbuild traverser
+            // TODO traversal could be implemented with the esbuild traverser if not using vue...
             // get node_modules resolved paths traversing entrypoints
             dependenciesPaths = await getDependenciesPaths({
                 entryPoints,
@@ -148,11 +147,12 @@ export function esbuildOptimizerServerPlugin({
                         pathFromUrl(ctx.get('referer')), // should not be node_module, i can omit importer
                     )
 
-                const resolved = defaultResolver(
-                    importer ? path.dirname(importer) : root,
-                    ctx.path.slice(1).replace(moduleRE, ''),
+                const resolved = osAgnosticPath(
+                    defaultResolver(
+                        importer ? path.dirname(importer) : root,
+                        ctx.path.slice(1).replace(moduleRE, ''),
+                    ),
                 )
-                // TODO resolved files paths should be relative to root, and os agnostic
                 // console.log({ resolved })
                 if (resolved && bundleMap[resolved]) {
                     let bundlePath = bundleMap[resolved]
@@ -198,19 +198,17 @@ async function getDependenciesPaths({
     requestToFile,
 }) {
     // serve react refresh runtime
-    const traversalResult = await traverseEsModules({
+    const traversalResult: Array<
+        Omit<TraversalResultType, 'importPath'>
+    > = await traverseEsModules({
         entryPoints: entryPoints.map((entry) =>
             formatPathToUrl({ baseUrl, entry }),
         ),
         stopTraversing: (importPath, context) => {
-            // TODO add importer dir to stopTraversing
-            // console.log({ importPath, context })
-
             return (
                 moduleRE.test(importPath) &&
                 isNodeModule(
                     defaultResolver(
-                        // TODO here resolve fails for non node_modules is it ok?
                         requestToFile(pathFromUrl(context)),
                         relativePathFromUrl(importPath).replace(moduleRE, ''),
                     ),
@@ -229,7 +227,7 @@ async function getDependenciesPaths({
 
             const resolved = defaultResolver(
                 importerDir,
-                relativePathFromUrl(x.resolvedImportPath).replace(moduleRE, ''), // TODO in esbuild these path will be already resolved
+                relativePathFromUrl(x.resolvedImportPath).replace(moduleRE, ''),
             )
             return resolved
         })

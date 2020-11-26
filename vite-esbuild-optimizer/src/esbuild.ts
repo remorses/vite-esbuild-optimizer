@@ -8,7 +8,7 @@ import toUnixPath from 'slash'
 import tmpfile from 'tmpfile'
 import { CustomResolverPlugin } from './plugins'
 import { DependencyStatsOutput } from './stats'
-import { OptimizeAnalysisResult } from './support'
+import { OptimizeAnalysisResult, osAgnosticPath } from './support'
 
 export async function bundleWithEsBuild({
     entryPoints,
@@ -117,7 +117,7 @@ function metafileToBundleMap(_options: {
 
     const bundleMap = fromEntries(
         maps.map(([k, output]) => {
-            return [k, toUnixPath(path.normalize(path.resolve(output)))] // TODO relative path
+            return [k, osAgnosticPath(output)]
         }),
     )
 
@@ -129,7 +129,7 @@ function metafileToAnalysis(_options: {
     entryPoints: string[]
 }): OptimizeAnalysisResult {
     const { meta, entryPoints } = _options
-    const inputFiles = new Set(entryPoints.map((x) => path.resolve(x))) // TODO replace resolve with join in cwd
+    const inputFiles = new Set(entryPoints.map((x) => path.resolve(x)))
     const analysis: OptimizeAnalysisResult = {
         isCommonjs: fromEntries(
             Object.keys(meta.outputs)
@@ -147,12 +147,12 @@ function metafileToAnalysis(_options: {
                     if (!isCommonjs) {
                         return
                     }
-                    const inputs = Object.keys(meta.outputs[output].inputs)
+                    const inputs = Object.keys(meta.outputs[output].inputs) // TODO implicitly relative to cwd
                     const input = inputs.find((x) =>
                         inputFiles.has(path.resolve(x)),
                     )
                     // TODO use output as key after i implement custom requestToFile that redirects to optimized bundle
-                    return [input, isCommonjs] // TODO output must be the import path id
+                    return [input, isCommonjs]
                 })
                 .filter(Boolean),
         ),

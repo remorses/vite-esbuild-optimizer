@@ -44,7 +44,6 @@ export function CustomResolverPlugin({ resolver }): Plugin {
                         path: args.path,
                     }
                 }
-                // TODO win paths
                 if (args.path.startsWith('.') || args.path.startsWith('/')) {
                     return null
                 }

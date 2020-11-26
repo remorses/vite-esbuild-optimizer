@@ -1,4 +1,6 @@
 import { EventEmitter, once } from 'events'
+import path from 'path'
+import slash from 'slash'
 
 const queryRE = /\?.*$/
 const hashRE = /#.*$/
@@ -22,8 +24,8 @@ export function isUrl(req: string) {
     return req.startsWith('http://') || req.startsWith('https://')
 }
 
+// TODO import OptimizeAnalysisResult from vite
 export interface OptimizeAnalysisResult {
-    // TODO import from vite
     isCommonjs: { [name: string]: true }
 }
 
@@ -42,4 +44,14 @@ export class Mutex extends EventEmitter {
     wait(): Promise<any> {
         return once(this, this.READY_EVENT)
     }
+}
+
+export function osAgnosticPath(absPath: string | undefined) {
+    if (!absPath) {
+        return absPath
+    }
+    if (!path.isAbsolute(absPath)) {
+        absPath = path.resolve(absPath)
+    }
+    return slash(path.relative(process.cwd(), absPath))
 }
