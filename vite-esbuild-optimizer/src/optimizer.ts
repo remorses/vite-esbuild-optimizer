@@ -80,6 +80,7 @@ export function esbuildOptimizerServerPlugin({
 
             // bundle and create a map from node module path -> bundle path on disk
             await fs.remove(dest)
+            await fs.remove(resolveOptimizedCacheDir(root))
             const {
                 bundleMap: nonCachedBundleMap,
                 analysis,
