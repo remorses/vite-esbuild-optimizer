@@ -150,7 +150,6 @@ function metafileToAnalysis(_options: {
                     const input = inputs.find((x) =>
                         inputFiles.has(path.resolve(x)),
                     )
-                    // TODO use output as key after i implement custom requestToFile that redirects to optimized bundle
                     return [input, isCommonjs]
                 })
                 .filter(Boolean),

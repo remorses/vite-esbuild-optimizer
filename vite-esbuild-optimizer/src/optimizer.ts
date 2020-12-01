@@ -10,6 +10,7 @@ import findUp from 'find-up'
 import { promises as fsp } from 'fs'
 import { default as fs, default as fsx } from 'fs-extra'
 import path from 'path'
+import slash from 'slash'
 import url, { URL } from 'url'
 import type { ServerPlugin } from 'vite'
 import { resolveOptimizedCacheDir } from 'vite/dist/node/optimizer'
@@ -73,7 +74,6 @@ export function esbuildOptimizerServerPlugin({
             dependenciesPaths = await getDependenciesPaths({
                 entryPoints,
                 root,
-
                 requestToFile: resolver.requestToFile,
                 baseUrl: `http://localhost:${port}`,
             })
@@ -87,7 +87,9 @@ export function esbuildOptimizerServerPlugin({
                 stats,
             } = await bundleWithEsBuild({
                 dest,
-                entryPoints: dependenciesPaths,
+                entryPoints: dependenciesPaths.map((x) =>
+                    path.resolve(root, x),
+                ),
             })
 
             const analysisFile = path.join(
@@ -226,6 +228,7 @@ async function getDependenciesPaths({
             return resolved
         })
         .filter((x) => isNodeModule(x))
+        .map((x) => slash(path.relative(root, x)))
     resolvedFiles = Array.from(new Set(resolvedFiles))
     return resolvedFiles
 }
