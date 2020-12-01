@@ -2,6 +2,7 @@
     "name": "esbuild-polyfills",
     "_": "[bump]",
     "version": "0.1.0",
+    "preferUnplugged": true,
     "description": "",
     "main": "src/index.js",
     "mocha": {
