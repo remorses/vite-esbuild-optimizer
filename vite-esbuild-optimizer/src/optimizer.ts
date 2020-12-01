@@ -16,7 +16,7 @@ import type { ServerPlugin } from 'vite'
 import { resolveOptimizedCacheDir } from 'vite/dist/node/optimizer'
 import { BundleMap, bundleWithEsBuild } from './esbuild'
 import { printStats } from './stats'
-import { isUrl, Mutex, osAgnosticPath } from './support'
+import { isUrl, Lock, osAgnosticPath } from './support'
 
 const moduleRE = /^\/?@modules\//
 const HASH_FILE_NAME = '.optimizer-hash'
@@ -47,7 +47,7 @@ export function esbuildOptimizerServerPlugin({
 
         const hashPath = path.join(dest, HASH_FILE_NAME)
 
-        let mutex = new Mutex()
+        let mutex = new Lock()
 
         server.once('listening', async function optimize() {
             const depHash = await getDepHash(root)

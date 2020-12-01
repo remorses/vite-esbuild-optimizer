@@ -29,7 +29,7 @@ export interface OptimizeAnalysisResult {
     isCommonjs: { [name: string]: true }
 }
 
-export class Mutex extends EventEmitter {
+export class Lock extends EventEmitter {
     READY_EVENT = 'READY_EVENT'
     isReady = false
     constructor() {
