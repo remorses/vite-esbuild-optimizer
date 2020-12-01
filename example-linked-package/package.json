@@ -2,6 +2,7 @@
     "name": "example-linked-package",
     "version": "1.0.0",
     "main": "index.tsx",
+    "private": true,
     "scripts": {
         "dev": "vite serve .",
         "myvite": "node /Users/morse/Documents/GitHub/vite/bin/vite.js"
