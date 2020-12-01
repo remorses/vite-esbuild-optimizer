@@ -5,7 +5,7 @@ import {
     traverseEsModules,
     urlResolver,
 } from 'es-module-traversal'
-import { traverseWithEsbuild } from 'es-module-traversal/dist/traverseEsbuild'
+// import { traverseWithEsbuild } from 'es-module-traversal/dist/traverseEsbuild'
 import findUp from 'find-up'
 import { promises as fsp } from 'fs'
 import { default as fs, default as fsx } from 'fs-extra'
@@ -172,16 +172,17 @@ export function esbuildOptimizerServerPlugin({
     }
 }
 
-async function getDependenciesPathsEsbuild({
-    entryPoints,
-    root,
-    requestToFile,
-}) {
-    const res = await traverseWithEsbuild({
-        entryPoints: entryPoints.map((x) => requestToFile(x)),
-    })
-    return res.map((x) => x.resolvedImportPath)
-}
+// TODO use esbuild to traverse for faster traverse times
+// async function getDependenciesPathsEsbuild({
+//     entryPoints,
+//     root,
+//     requestToFile,
+// }) {
+//     const res = await traverseWithEsbuild({
+//         entryPoints: entryPoints.map((x) => requestToFile(x)),
+//     })
+//     return res.map((x) => x.resolvedImportPath)
+// }
 
 // returns list of paths of all dependencies found traversing the entrypoints
 async function getDependenciesPaths({
