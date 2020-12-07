@@ -50,72 +50,82 @@ export function esbuildOptimizerServerPlugin({
         let mutex = new Lock()
 
         server.once('listening', async function optimize() {
-            const depHash = await getDepHash(root)
-            if (!force && !stale) {
-                let prevHash = await fsp
-                    .readFile(hashPath, 'utf-8')
-                    .catch(() => '')
+            try {
+                const depHash = await getDepHash(root)
+                if (!force && !stale) {
+                    let prevHash = await fsp
+                        .readFile(hashPath, 'utf-8')
+                        .catch(() => '')
 
-                // hash is consistent, no need to re-bundle
-                if (prevHash === depHash) {
-                    console.info('Hash is consistent. Skipping optimization.')
-                    mutex.ready()
-                    return
+                    // hash is consistent, no need to re-bundle
+                    if (prevHash === depHash) {
+                        console.info(
+                            'Hash is consistent. Skipping optimization.',
+                        )
+                        mutex.ready()
+                        return
+                    }
                 }
+                await updateHash(hashPath, depHash)
+
+                console.info('Optimizing dependencies')
+
+                const port = server.address()['port']
+
+                // TODO traversal could be implemented with the esbuild traverser if not using vue...
+                // get node_modules resolved paths traversing entrypoints
+                dependenciesPaths = await getDependenciesPaths({
+                    entryPoints,
+                    root,
+                    requestToFile: resolver.requestToFile,
+                    baseUrl: `http://localhost:${port}`,
+                })
+
+                // bundle and create a map from node module path -> bundle path on disk
+                await fs.remove(dest)
+                await fs.remove(resolveOptimizedCacheDir(root))
+                const {
+                    bundleMap: nonCachedBundleMap,
+                    analysis,
+                    stats,
+                } = await bundleWithEsBuild({
+                    dest,
+                    entryPoints: dependenciesPaths.map((x) =>
+                        path.resolve(root, x),
+                    ),
+                })
+
+                const analysisFile = path.join(
+                    resolveOptimizedCacheDir(root),
+                    ANALYSIS_FILE,
+                )
+                await fsx.createFile(analysisFile)
+                // console.log({ analysis })
+                await fs.writeFile(
+                    analysisFile,
+                    JSON.stringify(analysis, null, 4),
+                )
+
+                // create a map with incoming server path -> bundle server path
+                bundleMap = nonCachedBundleMap
+
+                await updateCache({
+                    cache: {
+                        bundleMap,
+                        dependenciesPaths,
+                    },
+                    dest,
+                })
+
+                // console.log({ bundleMap })
+
+                console.info(printStats(stats))
+                console.info('Optimized dependencies\n')
+            } catch (e) {
+                console.error(e)
+            } finally {
+                mutex.ready()
             }
-            await updateHash(hashPath, depHash)
-
-            console.info('Optimizing dependencies')
-
-            const port = server.address()['port']
-
-            // TODO traversal could be implemented with the esbuild traverser if not using vue...
-            // get node_modules resolved paths traversing entrypoints
-            dependenciesPaths = await getDependenciesPaths({
-                entryPoints,
-                root,
-                requestToFile: resolver.requestToFile,
-                baseUrl: `http://localhost:${port}`,
-            })
-
-            // bundle and create a map from node module path -> bundle path on disk
-            await fs.remove(dest)
-            await fs.remove(resolveOptimizedCacheDir(root))
-            const {
-                bundleMap: nonCachedBundleMap,
-                analysis,
-                stats,
-            } = await bundleWithEsBuild({
-                dest,
-                entryPoints: dependenciesPaths.map((x) =>
-                    path.resolve(root, x),
-                ),
-            })
-
-            const analysisFile = path.join(
-                resolveOptimizedCacheDir(root),
-                ANALYSIS_FILE,
-            )
-            await fsx.createFile(analysisFile)
-            // console.log({ analysis })
-            await fs.writeFile(analysisFile, JSON.stringify(analysis, null, 4))
-
-            // create a map with incoming server path -> bundle server path
-            bundleMap = nonCachedBundleMap
-
-            await updateCache({
-                cache: {
-                    bundleMap,
-                    dependenciesPaths,
-                },
-                dest,
-            })
-
-            // console.log({ bundleMap })
-
-            console.info(printStats(stats))
-            console.info('Optimized dependencies\n')
-            mutex.ready()
         })
 
         app.use(async (ctx, next) => {
@@ -163,10 +173,7 @@ export function esbuildOptimizerServerPlugin({
             ) {
                 await fs.remove(hashPath)
                 console.error(
-                    `WARNING: using a non optimized dependency '${ctx.url.replace(
-                        moduleRE,
-                        '',
-                    )}'\nRestart the server to optimize dependencies again`,
+                    `WARNING: using a non optimized dependency '${ctx.path}'\nRestart the server to optimize dependencies again`,
                 )
                 // delete cache to optimize on next start
             }
@@ -200,16 +207,8 @@ async function getDependenciesPaths({
         entryPoints: entryPoints.map((entry) =>
             formatPathToUrl({ baseUrl, entry }),
         ),
-        stopTraversing: (importPath, context) => {
-            return (
-                moduleRE.test(importPath) &&
-                isNodeModule(
-                    defaultResolver(
-                        requestToFile(pathFromUrl(context)),
-                        relativePathFromUrl(importPath).replace(moduleRE, ''),
-                    ),
-                )
-            )
+        stopTraversing: (modulePath) => {
+            return isNodeModule(modulePath)
         },
         resolver: urlResolver({
             root: path.resolve(root),
