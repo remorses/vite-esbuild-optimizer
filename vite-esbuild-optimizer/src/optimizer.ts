@@ -81,6 +81,14 @@ export function esbuildOptimizerServerPlugin({
                     baseUrl: `http://localhost:${port}`,
                 })
 
+                // if (dependenciesPaths.length) {
+                //     console.info(
+                //         `Found dependencies:\n${dependenciesPaths
+                //             .map((x) => `  ${x}`)
+                //             .join('\n')} `,
+                //     )
+                // }
+
                 // bundle and create a map from node module path -> bundle path on disk
                 await fs.remove(dest)
                 await fs.remove(resolveOptimizedCacheDir(root))
@@ -172,9 +180,9 @@ export function esbuildOptimizerServerPlugin({
                 isNodeModule(resolver.requestToFile(ctx.url))
             ) {
                 await fs.remove(hashPath)
-                console.error(
-                    `WARNING: using a non optimized dependency '${ctx.path}'\nRestart the server to optimize dependencies again`,
-                )
+                // console.error(
+                //     `WARNING: using a non optimized dependency '${ctx.path}'\nRestart the server to optimize dependencies again`,
+                // )
                 // delete cache to optimize on next start
             }
         })
@@ -208,7 +216,7 @@ async function getDependenciesPaths({
             formatPathToUrl({ baseUrl, entry }),
         ),
         stopTraversing: (modulePath) => {
-            return isNodeModule(modulePath)
+            return modulePath.includes('/@modules')
         },
         resolver: urlResolver({
             root: path.resolve(root),

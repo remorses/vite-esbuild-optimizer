@@ -1,6 +1,6 @@
 {
     "private": true,
-    "name": "vite-esbuild-optimizer-root",
+    "name": "root",
     "workspaces": {
         "nohoist": [
             "example-linked-package/smoldash"
@@ -13,7 +13,7 @@
         ]
     },
     "scripts": {
-        "watch": "tsc -b -w",
+        "watch": "ultra -r watch",
         "echo": "echo ok",
         "test": "jest"
     },
@@ -23,6 +23,7 @@
         "jest": "^26.6.1",
         "prettier": "^2.2.0",
         "prettier-plugin-organize-imports": "^1.1.1",
-        "typescript": "^4.1.2"
+        "typescript": "^4.1.2",
+        "ultra-runner": "^3.6.0"
     }
 }

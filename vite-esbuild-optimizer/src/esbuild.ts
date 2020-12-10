@@ -5,7 +5,7 @@ import fs from 'fs'
 import path from 'path'
 import toUnixPath from 'slash'
 import tmpfile from 'tmpfile'
-import { CustomResolverPlugin } from './plugins'
+import { NodeResolvePlugin, NodeModulesPolyfillPlugin } from '@esbuild-plugins/all'
 import { DependencyStatsOutput } from './stats'
 import { OptimizeAnalysisResult, osAgnosticPath } from './support'
 
@@ -43,11 +43,8 @@ export async function bundleWithEsBuild({
             global: 'window',
             ...generateEnvReplacements(env),
         },
-        inject: [require.resolve('esbuild-polyfills')],
-        plugins: [CustomResolverPlugin({ resolver: defaultResolver })],
-        // TODO inject polyfills for runtime globals like process, ...etc
-        // TODO allow importing from node builtins when using allowNodeImports
-        // TODO add plugin for pnp resolution
+        inject: [require.resolve('@esbuild-plugins/node-globals-polyfill/process')],
+        // plugins: [NodeResolvePlugin({}), NodeModulesPolyfillPlugin()],
         tsconfig: tsconfigTempFile,
         bundle: true,
         format: 'esm',
